@@ -1,83 +1,70 @@
-import { Group, MathUtils, Mesh, MeshPhongMaterial, Quaternion, Vector3 } from 'three'
-import { FollowCameraComponent } from '../../camera/components/FollowCameraComponent'
-import { EngineEvents } from '../../ecs/classes/EngineEvents'
 import {
   addComponent,
-  createEntity,
+  defineQuery,
   getComponent,
   hasComponent,
   removeComponent
-} from '../../ecs/functions/EntityFunctions'
-import { LocalInputReceiverComponent } from '../../input/components/LocalInputReceiverComponent'
-import { HighlightComponent } from '../../renderer/components/HighlightComponent'
+} from '../../ecs/functions/ComponentFunctions'
 import { Object3DComponent } from '../../scene/components/Object3DComponent'
-import { AvatarComponent } from '../../avatar/components/AvatarComponent'
-import { TransformComponent } from '../../transform/components/TransformComponent'
 import { BoundingBoxComponent } from '../components/BoundingBoxComponent'
 import { InteractableComponent } from '../components/InteractableComponent'
 import { InteractiveFocusedComponent } from '../components/InteractiveFocusedComponent'
 import { InteractorComponent } from '../components/InteractorComponent'
 import { SubFocusedComponent } from '../components/SubFocusedComponent'
-import { FontManager } from '../../xrui/classes/FontManager'
-import { hideInteractText, showInteractText } from '../functions/interactText'
+import { HighlightComponent } from '../../renderer/components/HighlightComponent'
+import { XRUIComponent } from '@xrengine/engine/src/xrui/components/XRUIComponent'
 import { interactBoxRaycast } from '../functions/interactBoxRaycast'
 import { InteractedComponent } from '../components/InteractedComponent'
-import AudioSource from '../../scene/classes/AudioSource'
-import { Engine } from '../../ecs/classes/Engine'
 import { createBoxComponent } from '../functions/createBoxComponent'
-import { defineQuery, defineSystem, enterQuery, System } from 'bitecs'
-import { ECSWorld } from '../../ecs/classes/World'
-import { AudioTagComponent } from '../../audio/components/AudioTagComponent'
-import { PersistTagComponent } from '../../scene/components/PersistTagComponent'
+import { World } from '../../ecs/classes/World'
+import {
+  createInteractUI,
+  showInteractUI,
+  hideInteractUI,
+  updateInteractUI,
+  setUserDataInteractUI,
+  InteractiveUI
+} from '../functions/interactUI'
+import { EquippedComponent } from '../components/EquippedComponent'
+import { Not } from 'bitecs'
+import { dispatchLocal } from '../../networking/functions/dispatchFrom'
+import { EngineActions } from '../../ecs/classes/EngineService'
+import { AudioComponent } from '../../audio/components/AudioComponent'
+import { toggleAudio } from '../../scene/functions/loaders/AudioFunctions'
+import { VideoComponent } from '../../scene/components/VideoComponent'
+import { VolumetricComponent } from '../../scene/components/VolumetricComponent'
+import { toggleVideo } from '../../scene/functions/loaders/VideoFunctions'
+import { toggleVolumetric } from '../../scene/functions/loaders/VolumetricFunctions'
 
-const upVec = new Vector3(0, 1, 0)
-
-export const InteractiveSystem = async (): Promise<System> => {
+export default async function InteractiveSystem(world: World) {
   const interactorsQuery = defineQuery([InteractorComponent])
-
-  const interactiveQuery = defineQuery([InteractableComponent])
-  const interactiveAddQuery = enterQuery(interactiveQuery)
-
+  // Included Object3DComponent in query because Object3DComponent might be added with delay for network spawned objects
+  const interactiveQuery = defineQuery([InteractableComponent, Object3DComponent, Not(EquippedComponent)])
   const boundingBoxQuery = defineQuery([BoundingBoxComponent])
-
   const focusQuery = defineQuery([InteractableComponent, InteractiveFocusedComponent])
-  const focusAddQuery = enterQuery(focusQuery)
-  const focusRemoveQuery = enterQuery(focusQuery)
-
   const subfocusQuery = defineQuery([InteractableComponent, SubFocusedComponent])
-  const subfocusAddQuery = enterQuery(subfocusQuery)
-  const subfocusRemoveQuery = enterQuery(subfocusQuery)
-
-  const localUserQuery = defineQuery([LocalInputReceiverComponent, AvatarComponent])
   const interactedQuery = defineQuery([InteractedComponent])
-  const interactedAddQuery = enterQuery(interactedQuery)
+  const xrComponentQuery = defineQuery([XRUIComponent, Object3DComponent])
 
-  const geometry = FontManager.instance.create3dText('INTERACT', new Vector3(0.8, 1, 0.2))
-
-  const textSize = 0.1
-  const text = new Mesh(geometry, new MeshPhongMaterial({ color: 0xd4af37, emissive: 0xd4af37, emissiveIntensity: 1 }))
-  text.scale.setScalar(textSize)
-
-  const interactTextEntity = createEntity()
-  const textGroup = new Group().add(text)
-  addComponent(interactTextEntity, Object3DComponent, { value: textGroup })
-  Engine.scene.add(textGroup)
-  addComponent(interactTextEntity, PersistTagComponent, {})
-  const transformComponent = addComponent(interactTextEntity, TransformComponent, {
-    position: new Vector3(),
-    rotation: new Quaternion(),
-    scale: new Vector3(1, 1, 1)
-  })
-  transformComponent.scale.setScalar(0)
-  textGroup.visible = false
-
-  return defineSystem((world: ECSWorld) => {
-    const { time } = world
-
-    for (const entity of interactiveAddQuery(world)) {
-      if (!hasComponent(entity, BoundingBoxComponent) && hasComponent(entity, Object3DComponent)) {
+  return () => {
+    for (const entity of interactiveQuery.enter(world)) {
+      const interactionData = getComponent(entity, InteractableComponent)
+      if (!hasComponent(entity, BoundingBoxComponent)) {
         createBoxComponent(entity)
       }
+      if (interactionData.interactionType !== 'equippable' && !InteractiveUI.get(entity)) {
+        createInteractUI(entity)
+      }
+    }
+
+    for (const entity of interactiveQuery.exit(world)) {
+      // this getComponent check is required for handling cases when multiple setEquippedObject cached network action are received
+      // and this exit query could get called with EquippedComponent not being present on the entity
+      if (getComponent(entity, EquippedComponent)) {
+        removeComponent(entity, BoundingBoxComponent)
+      }
+      removeComponent(entity, InteractiveFocusedComponent)
+      removeComponent(entity, SubFocusedComponent)
     }
 
     const interactives = interactiveQuery(world)
@@ -109,51 +96,41 @@ export const InteractiveSystem = async (): Promise<System> => {
     }
 
     // removal is the first because the hint must first be deleted, and then a new one appears
-    for (const entity of focusRemoveQuery(world)) {
-      hideInteractText(interactTextEntity)
+    for (const entity of focusQuery.exit()) {
+      hideInteractUI(entity)
     }
 
-    for (const entity of focusAddQuery(world)) {
-      showInteractText(interactTextEntity, entity)
+    for (const entity of focusQuery.enter()) {
+      showInteractUI(entity)
     }
 
-    for (const entity of subfocusAddQuery(world)) {
+    for (const entity of subfocusQuery.enter()) {
       addComponent(entity, HighlightComponent, { color: 0xff0000, hiddenColor: 0x0000ff, edgeStrength: 1 })
     }
-    for (const entity of subfocusRemoveQuery(world)) {
+    for (const entity of subfocusQuery.exit()) {
       removeComponent(entity, HighlightComponent)
     }
 
-    for (const entity of interactedAddQuery(world)) {
+    for (const entity of xrComponentQuery.enter()) {
+      if (InteractiveUI.has(entity)) setUserDataInteractUI(entity)
+    }
+
+    for (const xrEntity of InteractiveUI.keys()) {
+      updateInteractUI(xrEntity)
+    }
+
+    for (const entity of interactedQuery.enter()) {
       const interactiveComponent = getComponent(entity, InteractableComponent)
-      if (hasComponent(entity, AudioTagComponent)) {
-        const mediaObject = getComponent(entity, Object3DComponent).value as AudioSource
-        mediaObject?.toggle()
+      if (hasComponent(entity, AudioComponent)) {
+        toggleAudio(entity)
+      } else if (hasComponent(entity, VideoComponent)) {
+        toggleVideo(entity)
+      } else if (hasComponent(entity, VolumetricComponent)) {
+        toggleVolumetric(entity)
       } else {
-        EngineEvents.instance.dispatchEvent({
-          type: EngineEvents.EVENTS.OBJECT_ACTIVATION,
-          ...interactiveComponent.data
-        })
+        dispatchLocal(EngineActions.objectActivation(interactiveComponent))
       }
       removeComponent(entity, InteractedComponent)
     }
-
-    for (const entity of localUserQuery(world)) {
-      // animate the interact text up and down if it's visible
-      const interactTextObject = getComponent(interactTextEntity, Object3DComponent).value
-      if (!interactTextObject.visible) continue
-      interactTextObject.children[0].position.y = Math.sin(time * 1.8) * 0.05
-      if (Engine.activeCameraFollowTarget && hasComponent(Engine.activeCameraFollowTarget, FollowCameraComponent)) {
-        interactTextObject.children[0].setRotationFromAxisAngle(
-          upVec,
-          MathUtils.degToRad(getComponent(Engine.activeCameraFollowTarget, FollowCameraComponent).theta)
-        )
-      } else {
-        const { x, z } = getComponent(entity, TransformComponent).position
-        interactTextObject.lookAt(x, interactTextObject.position.y, z)
-      }
-    }
-
-    return world
-  })
+  }
 }

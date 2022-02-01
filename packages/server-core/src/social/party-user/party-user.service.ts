@@ -1,4 +1,3 @@
-import { ServiceAddons } from '@feathersjs/feathers'
 import { Application } from '../../../declarations'
 import { PartyUser } from './party-user.class'
 import createModel from './party-user.model'
@@ -8,7 +7,7 @@ import partyUserDocs from './party-user.docs'
 
 declare module '../../../declarations' {
   interface ServiceTypes {
-    'party-user': PartyUser & ServiceAddons<any>
+    'party-user': PartyUser
   }
 }
 
@@ -27,11 +26,11 @@ export default (app: Application): void => {
   const event = new PartyUser(options, app)
   event.docs = partyUserDocs
 
-  app.use('/party-user', event)
+  app.use('party-user', event)
 
   const service = app.service('party-user')
 
-  service.hooks(hooks as any)
+  service.hooks(hooks)
 
   /**
    * A function which is used to create new party user
@@ -42,6 +41,7 @@ export default (app: Application): void => {
    */
 
   service.publish('created', async (data): Promise<any> => {
+    data.isOwner = data.isOwner === 1 ? true : data.isOwner === 0 ? false : data.isOwner
     try {
       // const channel = await (app.service('channel') as any).Model.findOne({
       //   where: {
@@ -99,6 +99,7 @@ export default (app: Application): void => {
    * @author Vyacheslav Solovjov
    */
   service.publish('patched', async (data): Promise<any> => {
+    data.isOwner = data.isOwner === 1 ? true : data.isOwner === 0 ? false : data.isOwner
     try {
       // const channel = await (app.service('channel') as any).Model.findOne({
       //   where: {
@@ -159,6 +160,7 @@ export default (app: Application): void => {
    */
 
   service.publish('removed', async (data): Promise<any> => {
+    data.isOwner = data.isOwner === 1 ? true : data.isOwner === 0 ? false : data.isOwner
     try {
       // const channel = await (app.service('channel') as any).Model.findOne({
       //   where: {
@@ -180,6 +182,7 @@ export default (app: Application): void => {
           partyId: data.partyId
         }
       })
+      data.user = await app.service('user').get(data.userId)
       const targetIds = (partyUsers as any).data.map((partyUser) => {
         return partyUser.userId
       })

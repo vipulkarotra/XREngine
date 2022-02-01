@@ -3,6 +3,7 @@ import { Service, SequelizeServiceOptions } from 'feathers-sequelize'
 
 import { Application } from '../../../declarations'
 import { Params } from '@feathersjs/feathers'
+import { Op } from 'sequelize'
 import { extractLoggedInUserFromParams } from '../../user/auth-management/auth-management.utils'
 // import { Forbidden } from '@feathersjs/errors'
 
@@ -21,33 +22,53 @@ export class Party extends Service {
   }
 
   async find(params: Params): Promise<any> {
-    const action = params.query?.action
-    const skip = params.query?.$skip ? params.query.$skip : 0
-    const limit = params.query?.$limit ? params.query.$limit : 10
+    const { action, $skip, $limit, search, ...query } = params.query!
+    const skip = $skip ? $skip : 0
+    const limit = $limit ? $limit : 10
+    if (action === 'admin') {
+      let ip = {}
+      let name = {}
+      if (!isNaN(search)) {
+        ip = search ? { ipAddress: { [Op.like]: `%${search}%` } } : {}
+      } else {
+        name = search ? { name: { [Op.like]: `%${search}%` } } : {}
+      }
 
-    const party = await (this.app.service('party') as any).Model.findAndCountAll({
-      offset: skip,
-      limit: limit,
-      include: [
-        {
-          model: (this.app.service('location') as any).Model,
-          required: false
-        },
-        {
-          model: (this.app.service('instance') as any).Model,
-          required: false
-        }
-      ],
-      raw: true,
-      nest: true
-    })
-    return {
-      skip: skip,
-      limit: limit,
-      total: party.count,
-      data: party.rows
+      const party = await (this.app.service('party') as any).Model.findAndCountAll({
+        offset: skip,
+        limit: limit,
+        include: [
+          {
+            model: (this.app.service('location') as any).Model,
+            required: true,
+            where: { ...name }
+          },
+          {
+            model: (this.app.service('instance') as any).Model,
+            required: true,
+            where: { ...ip }
+          },
+          {
+            model: (this.app.service('party-user') as any).Model,
+            required: false
+          }
+        ],
+        where: query,
+        raw: true,
+        nest: true
+      })
+
+      return {
+        skip: skip,
+        limit: limit,
+        total: party.count,
+        data: party.rows
+      }
+    } else {
+      return super.find(params)
     }
   }
+
   /**
    * A function which used to get specific party
    *
@@ -56,12 +77,12 @@ export class Party extends Service {
    * @returns {@Object} of single party
    * @author Vyacheslav Solovjov
    */
-  async get(id: string | null, params?: Params): Promise<any> {
+  async get(id: string, params: Params): Promise<any> {
     if (id == null) {
       const loggedInUser = extractLoggedInUserFromParams(params)
       const partyUserResult = await this.app.service('party-user').find({
         query: {
-          userId: loggedInUser.userId
+          userId: loggedInUser.id
         }
       })
 

@@ -1,23 +1,43 @@
 import { Vector3 } from 'three'
-import { getComponent } from '../ecs/functions/EntityFunctions'
+import { defineQuery, getComponent } from '../ecs/functions/ComponentFunctions'
 import { AnimationComponent } from './components/AnimationComponent'
 import { AvatarAnimationGraph } from './animations/AvatarAnimationGraph'
 import { AvatarStates } from './animations/Util'
 import { AnimationRenderer } from './animations/AnimationRenderer'
-import { loadAvatar } from './functions/avatarFunctions'
 import { AnimationManager } from './AnimationManager'
 import { AvatarAnimationComponent } from './components/AvatarAnimationComponent'
-import { ECSWorld } from '../ecs/classes/World'
-import { defineQuery, defineSystem, enterQuery, System } from 'bitecs'
+import { AnimationGraph } from './animations/AnimationGraph'
+import { World } from '../ecs/classes/World'
+import { Engine } from '../ecs/classes/Engine'
+import { NetworkObjectComponent } from '../networking/components/NetworkObjectComponent'
+import matches from 'ts-matches'
+import { NetworkWorldAction } from '../networking/functions/NetworkWorldAction'
 
-export const AnimationSystem = async (): Promise<System> => {
-  const animationQuery = defineQuery([AnimationComponent])
-  const avatarAnimationQuery = defineQuery([AnimationComponent, AvatarAnimationComponent])
-  const avatarAnimationAddQuery = enterQuery(avatarAnimationQuery)
+const animationQuery = defineQuery([AnimationComponent])
+const avatarAnimationQuery = defineQuery([AnimationComponent, AvatarAnimationComponent])
 
-  await Promise.all([AnimationManager.instance.getDefaultModel(), AnimationManager.instance.getAnimations()])
+export default async function AnimationSystem(world: World) {
+  world.receptors.push(animationActionReceptor)
 
-  return defineSystem((world: ECSWorld) => {
+  function animationActionReceptor(action) {
+    matches(action).when(NetworkWorldAction.avatarAnimation.matches, ({ $from }) => {
+      if ($from === Engine.userId) {
+        return
+      }
+
+      const avatarEntity = world.getUserAvatarEntity($from)
+      const networkObject = getComponent(avatarEntity, NetworkObjectComponent)
+      if (!networkObject) {
+        return console.warn(`Avatar Entity for user id ${$from} does not exist! You should probably reconnect...`)
+      }
+      action.params.forceTransition = true
+      AnimationGraph.forceUpdateAnimationState(avatarEntity, action.newStateName, action.params)
+    })
+  }
+
+  await AnimationManager.instance.getAnimations()
+
+  return () => {
     const { delta } = world
 
     for (const entity of animationQuery(world)) {
@@ -26,8 +46,7 @@ export const AnimationSystem = async (): Promise<System> => {
       animationComponent.mixer.update(modifiedDelta)
     }
 
-    for (const entity of avatarAnimationAddQuery(world)) {
-      loadAvatar(entity)
+    for (const entity of avatarAnimationQuery.enter(world)) {
       const avatarAnimationComponent = getComponent(entity, AvatarAnimationComponent)
       avatarAnimationComponent.animationGraph = new AvatarAnimationGraph()
       avatarAnimationComponent.currentState = avatarAnimationComponent.animationGraph.states[AvatarStates.IDLE]
@@ -42,7 +61,5 @@ export const AnimationSystem = async (): Promise<System> => {
       avatarAnimationComponent.animationGraph.render(entity, deltaTime)
       AnimationRenderer.render(entity, delta)
     }
-
-    return world
-  })
+  }
 }

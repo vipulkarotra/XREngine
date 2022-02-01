@@ -1,21 +1,13 @@
-import React, { Component } from 'react'
+import React from 'react'
 import NodeEditor from './NodeEditor'
-import { Camera } from '@styled-icons/fa-solid/Camera'
+import { Vector3, Quaternion } from 'three'
 import { PropertiesPanelButton } from '../inputs/Button'
-import i18n from 'i18next'
-import { withTranslation } from 'react-i18next'
-
-/**
- * ScenePreviewCameraNodeEditorProps declaring props for ScenePreviewCameraNodeEditor.
- *
- * @author Robert Long
- * @type {Object}
- */
-type ScenePreviewCameraNodeEditorProps = {
-  editor?: object
-  node?: object
-  t: Function
-}
+import { useTranslation } from 'react-i18next'
+import { updateCameraTransform } from '@xrengine/engine/src/scene/functions/loaders/ScenePreviewCameraFunctions'
+import CameraAltIcon from '@mui/icons-material/CameraAlt'
+import { EditorComponentType } from './Util'
+import { CommandManager } from '../../managers/CommandManager'
+import { TransformComponent } from '@xrengine/engine/src/transform/components/TransformComponent'
 
 /**
  * ScenePreviewCameraNodeEditor provides the editor view to customize properties.
@@ -23,26 +15,35 @@ type ScenePreviewCameraNodeEditorProps = {
  * @author Robert Long
  * @type {Class component}
  */
-export class ScenePreviewCameraNodeEditor extends Component<ScenePreviewCameraNodeEditorProps, {}> {
-  // setting iconComponent as icon name
-  static iconComponent = Camera
+export const ScenePreviewCameraNodeEditor: EditorComponentType = (props) => {
+  const { t } = useTranslation()
 
-  // setting description for ScenePreviewCameraNode and will appear on editor view
-  static description = i18n.t('editor:properties.sceneCamera.description')
-  onSetFromViewport = () => {
-    ;(this.props.node as any).setFromViewport()
+  const onSetFromViewport = () => {
+    const updatedTransform = updateCameraTransform(props.node.entity)
+    const position = new Vector3()
+    const rotation = new Quaternion()
+    const scale = new Vector3()
+
+    updatedTransform.decompose(position, rotation, scale)
+    CommandManager.instance.setProperty([props.node], {
+      component: TransformComponent,
+      properties: { position, rotation }
+    })
   }
-  render() {
-    ScenePreviewCameraNodeEditor.description = this.props.t('editor:properties.sceneCamera.description')
-    return (
-      /* @ts-ignore */
-      <NodeEditor {...this.props} description={ScenePreviewCameraNodeEditor.description}>
-        <PropertiesPanelButton onClick={this.onSetFromViewport}>
-          {this.props.t('editor:properties.sceneCamera.lbl-setFromViewPort')}
-        </PropertiesPanelButton>
-      </NodeEditor>
-    )
-  }
+
+  return (
+    <NodeEditor
+      {...props}
+      name={t('editor:properties.sceneCamera.name')}
+      description={t('editor:properties.sceneCamera.description')}
+    >
+      <PropertiesPanelButton onClick={onSetFromViewport}>
+        {t('editor:properties.sceneCamera.lbl-setFromViewPort')}
+      </PropertiesPanelButton>
+    </NodeEditor>
+  )
 }
 
-export default withTranslation()(ScenePreviewCameraNodeEditor)
+ScenePreviewCameraNodeEditor.iconComponent = CameraAltIcon
+
+export default ScenePreviewCameraNodeEditor

@@ -1,5 +1,9 @@
 import { Mesh, Color, PlaneBufferGeometry, ShaderMaterial, DoubleSide, Plane, Vector3 } from 'three'
 import { addIsHelperFlag } from '@xrengine/engine/src/scene/functions/addIsHelperFlag'
+import { CommandManager } from '../managers/CommandManager'
+import EditorEvents from '../constants/EditorEvents'
+import { ObjectLayers } from '@xrengine/engine/src/scene/constants/ObjectLayers'
+import { setObjectLayers } from '@xrengine/engine/src/scene/functions/setObjectLayers'
 /**
  * Original Author: Fyrestar
  * https://discourse.threejs.org/t/three-infinitegridhelper-anti-aliased/8377
@@ -13,9 +17,9 @@ void main() {
 
       vec3 pos = position.xzy * uDistance;
       pos.xz += cameraPosition.xz;
-      
+
       worldPosition = pos;
-      
+
       gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
 
       gl_Position.z -= 0.01;
@@ -50,10 +54,14 @@ void main() {
   if ( gl_FragColor.a <= 0.0 ) discard;
 }
 `
+
+const GRID_INCREAMENT = 1.5
+
 export default class EditorInfiniteGridHelper extends Mesh {
   plane: Plane
   intersectionPointWorld: Vector3
   intersection: any
+
   constructor(size1?, size2?, color?, distance?) {
     color = color || new Color('white')
     size1 = size1 || 1
@@ -83,10 +91,12 @@ export default class EditorInfiniteGridHelper extends Mesh {
         derivatives: true
       }
     })
+
     super(geometry, material)
+
     this.visible = true
     this.name = 'EditorInfiniteGridHelper'
-    this.layers.set(1)
+    setObjectLayers(this, ObjectLayers.Scene)
     addIsHelperFlag(this)
     this.frustumCulled = false
     this.plane = new Plane(this.up)
@@ -97,10 +107,12 @@ export default class EditorInfiniteGridHelper extends Mesh {
       object: this
     }
   }
+
   setSize(size) {
     ;(this.material as any).uniforms.uSize1.value = size
     ;(this.material as any).uniforms.uSize2.value = size * 10
   }
+
   raycast(raycaster, intersects) {
     const point = new Vector3()
     const intersection = raycaster.ray.intersectPlane(this.plane, point)
@@ -111,5 +123,23 @@ export default class EditorInfiniteGridHelper extends Mesh {
     if (distance < raycaster.near || distance > raycaster.far) return null
     this.intersection.distance = distance
     intersects.push(this.intersection)
+  }
+
+  incrementGridHeight() {
+    this.setGridHeight(this.position.y + GRID_INCREAMENT)
+  }
+
+  decrementGridHeight() {
+    this.setGridHeight(this.position.y - GRID_INCREAMENT)
+  }
+
+  setGridHeight(value) {
+    this.position.y = value
+    CommandManager.instance.emitEvent(EditorEvents.GRID_HEIGHT_CHANGED, value)
+  }
+
+  toggleGridVisible() {
+    this.visible = !this.visible
+    CommandManager.instance.emitEvent(EditorEvents.GRID_VISIBILITY_CHANGED, this.visible)
   }
 }

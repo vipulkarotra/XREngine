@@ -1,5 +1,4 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import styled from 'styled-components'
 
 /**
@@ -38,12 +37,6 @@ const MediaGridItemContainer = (styled as any).div`
     border-color: ${(props) => props.theme.selected};
   }
 `
-
-MediaGridItemContainer.propTypes = {
-  aspectRatio: PropTypes.number.isRequired,
-  borderRadius: PropTypes.number.isRequired,
-  selected: PropTypes.bool
-}
 
 MediaGridItemContainer.defaultProps = {
   aspectRatio: 1,
@@ -130,6 +123,30 @@ const MediaGridItemLabel = (styled as any).div`
 
 /**
  *
+ * @author Abhishek Pathak
+ */
+const MediaGridInputLabel = (styled as any).input`
+  white-space: nowrap;
+  overflow: hidden;
+  width:auto;
+  text-overflow: ellipsis;
+  :disabled{
+    background:rgba(51, 170, 51, 0) ;
+    border-color:rgba(0,0,0,0);
+  }
+  :enabled{
+    color:black;
+  }
+  :hover{
+  overflow: visible;
+
+  }
+  text-align:center;
+  color:white;
+`
+
+/**
+ *
  * @author Robert Long
  * @param {any} label
  * @param {any} src
@@ -151,9 +168,10 @@ export function VideoMediaGridItem({ label, src, ...rest }) {
   )
 }
 
-VideoMediaGridItem.propTypes = {
-  src: PropTypes.string,
-  label: PropTypes.string
+interface ImageMediaGridItemProp {
+  label?: string
+  src?: string
+  onClick?: Function
 }
 
 /**
@@ -164,7 +182,7 @@ VideoMediaGridItem.propTypes = {
  * @param {any} rest
  * @returns
  */
-export function ImageMediaGridItem({ label, src, ...rest }) {
+export function ImageMediaGridItem({ label, src, ...rest }: ImageMediaGridItemProp) {
   return (
     <>
       <MediaGridItemContainer {...rest}>
@@ -179,14 +197,10 @@ export function ImageMediaGridItem({ label, src, ...rest }) {
   )
 }
 
-ImageMediaGridItem.propTypes = {
-  src: PropTypes.string,
-  label: PropTypes.string
-}
-
 /**
  *
  * @author Robert Long
+ * @author Abhishek Pathak
  * @param {any} label
  * @param {IconComponent} IconComponent
  * @param {any} rest
@@ -203,15 +217,10 @@ export function IconMediaGridItem({ label, iconComponent: IconComponent, ...rest
         </MediaGridItemContent>
       </MediaGridItemContainer>
       <MediaGridItemLabelContainer>
-        <MediaGridItemLabel>{label}</MediaGridItemLabel>
+        <MediaGridItemLabel placeholder={label} />
       </MediaGridItemLabelContainer>
     </>
   )
-}
-
-IconMediaGridItem.propTypes = {
-  iconComponent: PropTypes.object,
-  label: PropTypes.string
 }
 
 /**
@@ -225,11 +234,6 @@ export const MediaGrid = (styled as any).div`
   grid-template-columns: repeat(auto-fill, minmax(${(props) => props.minWidth}, 1fr));
   padding: ${(props) => props.gap};
 `
-
-MediaGrid.propTypes = {
-  gap: PropTypes.string.isRequired,
-  minWidth: PropTypes.string.isRequired
-}
 
 MediaGrid.defaultProps = {
   gap: '20px',

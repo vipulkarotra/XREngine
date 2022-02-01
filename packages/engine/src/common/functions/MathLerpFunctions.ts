@@ -1,4 +1,3 @@
-import { Quat } from '../../networking/types/SnapshotDataTypes'
 import { PI, TAU } from '../constants/MathConstants'
 
 /**
@@ -76,6 +75,8 @@ export const radianLerp = (start: number, end: number, t: number): number => {
   return result
 }
 
+type Quat = { x: number; y: number; z: number; w: number }
+
 /**
  * Find Interpolation between 2 quaternion.
  * @param start Quaternion from which to interpolate.
@@ -129,4 +130,49 @@ export const clamp = (value: number, min: number, max: number): number => {
   if (value < min) return min
   if (value > max) return max
   return value
+}
+
+/**
+ * Gradually changes a value towards a desired goal over time.
+ * @param current The current position.
+ * @param target The position we are trying to reach.
+ * @param currentVelocity The current velocity, this value is modified by the function every time you call it.
+ * @param smoothTime Approximately the time it will take to reach the target. A smaller value will reach the target faster.
+ * @param deltaTime The time since the last call to this function.
+ * @param maxSpeed Optionally allows you to clamp the maximum speed.
+ * @returns Smoothed interpolation between current and target.
+ */
+export const smoothDamp = (
+  current: number,
+  target: number,
+  currentVelocity,
+  smoothTime: number,
+  deltaTime,
+  maxSpeed: number = Infinity
+) => {
+  // Based on Game Programming Gems 4 Chapter 1.10
+  smoothTime = Math.max(0.0001, smoothTime)
+  let omega = 2 / smoothTime
+
+  let x = omega * deltaTime
+  let exp = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x)
+  let change = current - target
+  let originalTo = target
+
+  // Clamp maximum speed
+  let maxChange = maxSpeed * smoothTime
+  change = Math.min(Math.max(change, -maxChange), maxChange)
+  target = current - change
+
+  let temp = (currentVelocity.value + omega * change) * deltaTime
+  currentVelocity.value = (currentVelocity.value - omega * temp) * exp
+  let output = target + (change + temp) * exp
+
+  // Prevent overshooting
+  if (originalTo - current > 0.0 == output > originalTo) {
+    output = originalTo
+    currentVelocity = (output - originalTo) / deltaTime
+  }
+
+  return output
 }

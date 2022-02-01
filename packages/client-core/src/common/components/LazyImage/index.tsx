@@ -1,6 +1,6 @@
-import CardMedia from '@material-ui/core/CardMedia'
+import CardMedia from '@mui/material/CardMedia'
 import React, { useState, useEffect } from 'react'
-import PermIdentityIcon from '@material-ui/icons/PermIdentity'
+import PermIdentityIcon from '@mui/icons-material/PermIdentity'
 import styles from './LazyImage.module.scss'
 
 const placeHolder =
@@ -8,7 +8,7 @@ const placeHolder =
 
 export const LazyImage = ({ src, alt }) => {
   const [imageSrc, setImageSrc] = useState(placeHolder)
-  const [imageRef, setImageRef] = useState()
+  const [imageRef, setImageRef] = useState<HTMLImageElement>(null!)
   const [isLoadedImage, setIsLoadedImage] = useState(true)
 
   const onLoad = (event) => {
@@ -57,7 +57,7 @@ export const LazyImage = ({ src, alt }) => {
     <CardMedia
       component="img"
       alt={alt}
-      // @ts-ignore
+      //@ts-ignore
       ref={setImageRef}
       height="145"
       onLoad={onLoad}

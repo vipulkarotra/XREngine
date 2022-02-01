@@ -1,5 +1,4 @@
 // Initializes the `login` service on path `/login`
-import { ServiceAddons } from '@feathersjs/feathers'
 import { Application } from '../../../declarations'
 import { Login } from './login.class'
 import hooks from './login.hooks'
@@ -10,11 +9,11 @@ import loginDocs from './login.docs'
 // Add this service to the service type index
 declare module '../../../declarations' {
   interface ServiceTypes {
-    login: Login & ServiceAddons<any>
+    login: Login
   }
 }
 
-function redirect(req, res, next): Promise<any> {
+function redirect(req, res, next): any {
   try {
     if (res.data.error) {
       return res.redirect(`${config.client.url}/?error=${res.data.error as string}`)
@@ -26,7 +25,7 @@ function redirect(req, res, next): Promise<any> {
   }
 }
 
-export default (app: Application): any => {
+export default (app: Application) => {
   const options = {
     paginate: app.get('paginate')
   }
@@ -38,7 +37,7 @@ export default (app: Application): any => {
    */
   const event = new Login(options, app)
   event.docs = loginDocs
-  app.use('/login', event, redirect)
+  app.use('login', event, redirect)
 
   /**
    * Get our initialized service so that we can register hooks
@@ -47,5 +46,5 @@ export default (app: Application): any => {
    */
   const service = app.service('login')
 
-  service.hooks(hooks as any)
+  service.hooks(hooks)
 }

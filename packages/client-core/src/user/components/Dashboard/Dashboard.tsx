@@ -1,28 +1,20 @@
-import React from 'react'
+import { ChevronLeft, ChevronRight, Menu } from '@mui/icons-material'
+import AppBar from '@mui/material/AppBar'
+import Avatar from '@mui/material/Avatar'
+import CssBaseline from '@mui/material/CssBaseline'
+import Drawer from '@mui/material/Drawer'
+import IconButton from '@mui/material/IconButton'
+import { useTheme } from '@mui/material/styles'
+import Toolbar from '@mui/material/Toolbar'
+import Typography from '@mui/material/Typography'
 import clsx from 'clsx'
-import { useTheme } from '@material-ui/core/styles'
-import Drawer from '@material-ui/core/Drawer'
-import AppBar from '@material-ui/core/AppBar'
-import Toolbar from '@material-ui/core/Toolbar'
-import CssBaseline from '@material-ui/core/CssBaseline'
-import Typography from '@material-ui/core/Typography'
-import IconButton from '@material-ui/core/IconButton'
-import { ChevronLeft, ChevronRight, Menu } from '@material-ui/icons'
-import Avatar from '@material-ui/core/Avatar'
-import { selectAuthState } from '../../reducers/auth/selector'
-import { connect } from 'react-redux'
+import React from 'react'
+import { useAuthState } from '../../services/AuthService'
+import DashboardMenuItem from './DashboardMenuItem'
 import { useStylesForDashboard } from './styles'
-import SideMenu from './SideMenuItem'
 
 interface Props {
   children?: any
-  authState?: any
-}
-
-const mapStateToProps = (state: any): any => {
-  return {
-    authState: selectAuthState(state)
-  }
 }
 
 /**
@@ -33,12 +25,13 @@ const mapStateToProps = (state: any): any => {
  * @author Kevin KIMENYI <kimenyikevin@gmail.com>
  */
 
-const Dashboard = ({ children, authState }: Props) => {
+const Dashboard = ({ children }: Props) => {
+  const authState = useAuthState()
   const classes = useStylesForDashboard()
   const theme = useTheme()
   const [open, setOpen] = React.useState(false)
-  const admin = authState.get('user')
-  const isLoggedIn = authState.get('isLoggedIn')
+  const admin = authState.user
+  const isLoggedIn = authState.isLoggedIn.value
 
   const handleDrawerOpen = () => {
     setOpen(true)
@@ -57,7 +50,7 @@ const Dashboard = ({ children, authState }: Props) => {
           [classes.appBarShift]: open
         })}
       >
-        <Toolbar>
+        <Toolbar className={classes.header}>
           <IconButton
             color="inherit"
             style={{ color: 'white' }}
@@ -67,18 +60,21 @@ const Dashboard = ({ children, authState }: Props) => {
             className={clsx(classes.menuButton, {
               [classes.hide]: open
             })}
+            size="large"
           >
             <Menu />
           </IconButton>
-          <Typography variant="h6">Dashboard</Typography>
-          {admin?.name && (
-            <div className={classes.avatarPosition}>
-              <Avatar className={classes.orange}>{admin?.name?.charAt(0)?.toUpperCase()}</Avatar>
-              <Typography variant="h6" className={classes.marginLft}>
-                {admin?.name}
-              </Typography>
-            </div>
-          )}
+          <div className={classes.appBarHeadingContainer}>
+            <Typography variant="h6">Dashboard</Typography>
+            {admin?.name.value && (
+              <div className={classes.avatarPosition}>
+                <Avatar className={classes.orange}>{admin?.name?.value.charAt(0)?.toUpperCase()}</Avatar>
+                <Typography variant="h6" className={clsx(classes.marginLft, classes.appBarHeadingName)}>
+                  {admin?.name.value}
+                </Typography>
+              </div>
+            )}
+          </div>
         </Toolbar>
       </AppBar>
       <Drawer
@@ -95,18 +91,22 @@ const Dashboard = ({ children, authState }: Props) => {
         }}
       >
         <div className={classes.toolbar}>
-          <IconButton onClick={handleDrawerClose}>
+          <IconButton onClick={handleDrawerClose} style={{ color: '#fff' }} size="large">
             {theme.direction === 'rtl' ? <ChevronRight /> : <ChevronLeft />}
           </IconButton>
         </div>
-        <SideMenu />
+        <DashboardMenuItem />
       </Drawer>
-      <main className={classes.content}>
-        <div className={classes.toolbar} />
+      <main
+        className={clsx(classes.content, {
+          [classes.contentWidthDrawerOpen]: open,
+          [classes.contentWidthDrawerClosed]: !open
+        })}
+      >
         <div>{children}</div>
       </main>
     </div>
   )
 }
 
-export default connect(mapStateToProps, null)(Dashboard)
+export default Dashboard

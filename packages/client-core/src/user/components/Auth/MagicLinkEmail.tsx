@@ -1,41 +1,35 @@
 import React, { useState, useEffect } from 'react'
-import Button from '@material-ui/core/Button'
-import TextField from '@material-ui/core/TextField'
-import Typography from '@material-ui/core/Typography'
-import Container from '@material-ui/core/Container'
-import { connect } from 'react-redux'
-import { bindActionCreators, Dispatch } from 'redux'
-import Grid from '@material-ui/core/Grid'
-import FormControlLabel from '@material-ui/core/FormControlLabel'
-import Checkbox from '@material-ui/core/Checkbox'
+import Button from '@mui/material/Button'
+import TextField from '@mui/material/TextField'
+import Typography from '@mui/material/Typography'
+import Container from '@mui/material/Container'
+import Grid from '@mui/material/Grid'
+import FormControlLabel from '@mui/material/FormControlLabel'
+import Checkbox from '@mui/material/Checkbox'
 import { Link } from 'react-router-dom'
-import { Config } from '@xrengine/common/src/config'
 import styles from './Auth.module.scss'
-import { User } from '@xrengine/common/src/interfaces/User'
-import { createMagicLink, addConnectionBySms, addConnectionByEmail } from '../../reducers/auth/service'
-import { selectAuthState } from '../../reducers/auth/selector'
+import { AuthService } from '../../services/AuthService'
+import { useAuthState } from '../../services/AuthService'
 import { useTranslation } from 'react-i18next'
+import { AuthSettingService } from '../../../admin/services/Setting/AuthSettingService'
+import { useAdminAuthSettingState } from '../../../admin/services/Setting/AuthSettingService'
+
+const initialState = {
+  jwt: true,
+  local: false,
+  facebook: false,
+  github: false,
+  google: false,
+  linkedin: false,
+  twitter: false,
+  smsMagicLink: false,
+  emailMagicLink: false
+}
 
 interface Props {
-  auth?: any
   type?: 'email' | 'sms' | undefined
   isAddConnection?: boolean
-  createMagicLink?: typeof createMagicLink
-  addConnectionBySms?: typeof addConnectionBySms
-  addConnectionByEmail?: typeof addConnectionByEmail
 }
-
-const mapStateToProps = (state: any): any => {
-  return {
-    auth: selectAuthState(state)
-  }
-}
-
-const mapDispatchToProps = (dispatch: Dispatch): any => ({
-  createMagicLink: bindActionCreators(createMagicLink, dispatch),
-  addConnectionBySms: bindActionCreators(addConnectionBySms, dispatch),
-  addConnectionByEmail: bindActionCreators(addConnectionByEmail, dispatch)
-})
 
 const defaultState = {
   emailPhone: '',
@@ -45,12 +39,33 @@ const defaultState = {
   descr: ''
 }
 
-const termsOfService = Config.publicRuntimeConfig.staticPages?.termsOfService ?? '/terms-of-service'
+const termsOfService = globalThis.process.env['VITE_TERMS_OF_SERVICE_ADDRESS'] ?? '/terms-of-service'
 
 const MagicLinkEmail = (props: Props): any => {
-  const { auth, type, isAddConnection, createMagicLink, addConnectionBySms, addConnectionByEmail } = props
+  const { type, isAddConnection } = props
+
+  const auth = useAuthState()
   const [state, setState] = useState(defaultState)
   const { t } = useTranslation()
+  const authSettingState = useAdminAuthSettingState()
+  const [authSetting] = authSettingState?.authSettings?.value || []
+  const [authState, setAuthState] = useState(initialState)
+
+  useEffect(() => {
+    !authSetting && AuthSettingService.fetchAuthSetting()
+  }, [])
+
+  useEffect(() => {
+    if (authSetting) {
+      let temp = { ...initialState }
+      authSetting?.authStrategies?.forEach((el) => {
+        Object.entries(el).forEach(([strategyName, strategy]) => {
+          temp[strategyName] = strategy
+        })
+      })
+      setAuthState(temp)
+    }
+  }, [authSettingState?.updateNeeded?.value])
 
   const handleInput = (e: any): any => {
     setState({ ...state, [e.target.name]: e.target.value })
@@ -63,17 +78,17 @@ const MagicLinkEmail = (props: Props): any => {
   const handleSubmit = (e: any): any => {
     e.preventDefault()
     if (!isAddConnection) {
-      createMagicLink(state.emailPhone)
+      AuthService.createMagicLink(state.emailPhone, authState)
       setState({ ...state, isSubmitted: true })
       return
     }
 
-    const user = auth.get('user') as User
-    const userId = user ? user.id : ''
+    const user = auth.user
+    const userId = user ? user.id.value : ''
     if (type === 'email') {
-      addConnectionByEmail(state.emailPhone, userId)
+      AuthService.addConnectionByEmail(state.emailPhone, userId as string)
     } else {
-      addConnectionBySms(state.emailPhone, userId)
+      AuthService.addConnectionBySms(state.emailPhone, userId as string)
     }
   }
   let descr = ''
@@ -89,20 +104,16 @@ const MagicLinkEmail = (props: Props): any => {
       descr = t('user:auth.magiklink.descriptionSMS')
       label = t('user:auth.magiklink.lbl-phone')
       return
-    } else if (!Config.publicRuntimeConfig.auth) {
+    } else if (!authSetting) {
       descr = t('user:auth.magiklink.descriptionEmail')
       label = t('user:auth.magiklink.lbl-email')
       return
     }
     // Auth config is using Sms and Email, so handle both
-    if (
-      Config.publicRuntimeConfig.auth.enableSmsMagicLink &&
-      Config.publicRuntimeConfig.auth.enableEmailMagicLink &&
-      !type
-    ) {
+    if (authState?.emailMagicLink && authState?.smsMagicLink && !type) {
       descr = t('user:auth.magiklink.descriptionEmailSMS')
       label = t('user:auth.magiklink.lbl-emailPhone')
-    } else if (Config.publicRuntimeConfig.auth.enableSmsMagicLink) {
+    } else if (authState?.smsMagicLink) {
       descr = t('user:auth.magiklink.descriptionSMSUS')
       label = t('user:auth.magiklink.lbl-phone')
     } else {
@@ -179,4 +190,4 @@ const MagicLinkEmail = (props: Props): any => {
 
 const MagicLinkEmailWrapper = (props: Props): any => <MagicLinkEmail {...props} />
 
-export default connect(mapStateToProps, mapDispatchToProps)(MagicLinkEmailWrapper)
+export default MagicLinkEmailWrapper

@@ -1,22 +1,11 @@
-import React, { Component } from 'react'
-import PropTypes from 'prop-types'
+import React from 'react'
 import NodeEditor from './NodeEditor'
-import TimelineIcon from '@material-ui/icons/Timeline'
-import i18n from 'i18next'
-import { useTranslation, withTranslation } from 'react-i18next'
+import TimelineIcon from '@mui/icons-material/Timeline'
+import { useTranslation } from 'react-i18next'
 import { PropertiesPanelButton } from '../inputs/Button'
-
-/**
- * PropTypes Defining properties for SplineNodeEditor component.
- *
- * @author Hamza Mushtaq
- * @type {Object}
- */
-type SplineNodeEditorProps = {
-  editor?: object
-  node?: object
-  t: Function
-}
+import { EditorComponentType } from './Util'
+import { getComponent } from '@xrengine/engine/src/ecs/functions/ComponentFunctions'
+import { Object3DComponent } from '@xrengine/engine/src/scene/components/Object3DComponent'
 
 /**
  * SplineNodeEditor used to create and customize splines in the scene.
@@ -26,26 +15,22 @@ type SplineNodeEditorProps = {
  * @constructor
  */
 
-export class SplineNodeEditor extends Component<SplineNodeEditorProps, {}> {
-  //setting icon component name
-  static iconComponent = TimelineIcon
-  static description = i18n.t('editor:properties.spline.description')
-  onAddNode = () => {
-    ;(this.props.node as any).onAddNodeToSpline()
+export const SplineNodeEditor: EditorComponentType = (props) => {
+  const { t } = useTranslation()
+
+  const onAddNode = () => {
+    const obj3d = getComponent(props.node.entity, Object3DComponent).value
+    const newSplineObject = obj3d.userData.helper.addPoint()
+    obj3d.add(newSplineObject)
   }
 
-  render() {
-    SplineNodeEditor.description = this.props.t('editor:properties.spline.description')
-    //returning view to customize properties
-    return (
-      <NodeEditor description={SplineNodeEditor.description} {...this.props}>
-        {/* @ts-ignore */}
-        <PropertiesPanelButton onClick={this.onAddNode}>
-          {this.props.t('editor:properties.spline.lbl-addNode')}
-        </PropertiesPanelButton>
-      </NodeEditor>
-    )
-  }
+  return (
+    <NodeEditor description={t('editor:properties.spline.description')} {...props}>
+      <PropertiesPanelButton onClick={onAddNode}>{t('editor:properties.spline.lbl-addNode')}</PropertiesPanelButton>
+    </NodeEditor>
+  )
 }
 
-export default withTranslation()(SplineNodeEditor)
+SplineNodeEditor.iconComponent = TimelineIcon
+
+export default SplineNodeEditor

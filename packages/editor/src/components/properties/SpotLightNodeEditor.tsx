@@ -1,28 +1,15 @@
-import React, { Component } from 'react'
+import React from 'react'
 import NodeEditor from './NodeEditor'
 import InputGroup from '../inputs/InputGroup'
 import ColorInput from '../inputs/ColorInput'
 import NumericInputGroup from '../inputs/NumericInputGroup'
 import RadianNumericInputGroup from '../inputs/RadianNumericInputGroup'
-import { MathUtils as _Math } from 'three'
 import LightShadowProperties from './LightShadowProperties'
-import { Bullseye } from '@styled-icons/fa-solid/Bullseye'
-import i18n from 'i18next'
-import { withTranslation } from 'react-i18next'
-const radToDeg = _Math.radToDeg
-
-/**
- * SpotLightNodeEditorProps declaring SpotLightNodeEditor properties.
- *
- * @author Robert Long
- * @type {Object}
- */
-type SpotLightNodeEditorProps = {
-  editor?: object
-  node?: object
-  multiEdit?: boolean
-  t: Function
-}
+import { useTranslation } from 'react-i18next'
+import AdjustIcon from '@mui/icons-material/Adjust'
+import { EditorComponentType, updateProperty } from './Util'
+import { getComponent } from '@xrengine/engine/src/ecs/functions/ComponentFunctions'
+import { SpotLightComponent } from '@xrengine/engine/src/scene/components/SpotLightComponent'
 
 /**
  * SpotLightNodeEditor component class used to provide editor view for property customization.
@@ -30,105 +17,74 @@ type SpotLightNodeEditorProps = {
  *  @author Robert Long
  *  @type {class component}
  */
-export class SpotLightNodeEditor extends Component<SpotLightNodeEditorProps, {}> {
-  //initializing iconComponent with icon name
-  static iconComponent = Bullseye
+export const SpotLightNodeEditor: EditorComponentType = (props) => {
+  const { t } = useTranslation()
 
-  //initializing description and will appear on the editor view
-  static description = i18n.t('editor:properties.spotLight.description')
+  const lightComponent = getComponent(props.node.entity, SpotLightComponent)
 
-  //function to handle the changes in color property
-  onChangeColor = (color) => {
-    ;(this.props as any).editor.setPropertySelected('color', color)
-  }
-
-  //function to handle the changes in intensity property
-  onChangeIntensity = (intensity) => {
-    ;(this.props as any).editor.setPropertySelected('intensity', intensity)
-  }
-
-  //function to handle the changes innerConeAngle property
-  onChangeInnerConeAngle = (innerConeAngle) => {
-    ;(this.props as any).editor.setPropertySelected('innerConeAngle', innerConeAngle)
-  }
-
-  //function to handle the changes in outerConeAngle property
-  onChangeOuterConeAngle = (outerConeAngle) => {
-    ;(this.props as any).editor.setPropertySelected('outerConeAngle', outerConeAngle)
-  }
-
-  //function to handle the changes in ranges property
-  onChangeRange = (range) => {
-    ;(this.props as any).editor.setPropertySelected('range', range)
-  }
-
-  //rendering editor view
-  render() {
-    SpotLightNodeEditor.description = this.props.t('editor:properties.spotLight.description')
-    const { node, editor } = this.props as any
-    return (
-      /* @ts-ignore */
-      <NodeEditor {...this.props} description={SpotLightNodeEditor.description}>
-        {/* @ts-ignore */}
-        <InputGroup name="Color" label={this.props.t('editor:properties.spotLight.lbl-color')}>
-          {/* @ts-ignore */}
-          <ColorInput value={node.color} onChange={this.onChangeColor} />
-          {/* @ts-ignore */}
-        </InputGroup>
-        {/* @ts-ignore */}
-        <NumericInputGroup
-          name="Intensity"
-          label={this.props.t('editor:properties.spotLight.lbl-intensity')}
-          min={0}
-          smallStep={0.001}
-          mediumStep={0.01}
-          largeStep={0.1}
-          value={node.intensity}
-          onChange={this.onChangeIntensity}
-          unit="°"
-        />
-        {/* @ts-ignore */}
-        <RadianNumericInputGroup
-          name="Inner Cone Angle"
-          label={this.props.t('editor:properties.spotLight.lbl-innerConeAngle')}
-          min={0}
-          max={radToDeg(node.outerConeAngle)}
-          smallStep={0.1}
-          mediumStep={1}
-          largeStep={10}
-          value={node.innerConeAngle}
-          onChange={this.onChangeInnerConeAngle}
-          unit="°"
-        />
-        {/* @ts-ignore */}
-        <RadianNumericInputGroup
-          name="Outer Cone Angle"
-          label={this.props.t('editor:properties.spotLight.lbl-outerConeAngle')}
-          min={radToDeg(node.innerConeAngle + 0.00001)}
-          max={radToDeg(node.maxOuterConeAngle)}
-          smallStep={0.1}
-          mediumStep={1}
-          largeStep={10}
-          value={node.outerConeAngle}
-          onChange={this.onChangeOuterConeAngle}
-          unit="°"
-        />
-        {/* @ts-ignore */}
-        <NumericInputGroup
-          name="Range"
-          label={this.props.t('editor:properties.spotLight.lbl-range')}
-          min={0}
-          smallStep={0.1}
-          mediumStep={1}
-          largeStep={10}
-          value={node.range}
-          onChange={this.onChangeRange}
-          unit="m"
-        />
-        <LightShadowProperties node={node} editor={editor} />
-      </NodeEditor>
-    )
-  }
+  return (
+    <NodeEditor {...props} description={t('editor:properties.spotLight.description')}>
+      <InputGroup name="Color" label={t('editor:properties.spotLight.lbl-color')}>
+        <ColorInput value={lightComponent.color} onChange={updateProperty(SpotLightComponent, 'color')} />
+      </InputGroup>
+      <NumericInputGroup
+        name="Intensity"
+        label={t('editor:properties.spotLight.lbl-intensity')}
+        min={0}
+        smallStep={0.001}
+        mediumStep={0.01}
+        largeStep={0.1}
+        value={lightComponent.intensity}
+        onChange={updateProperty(SpotLightComponent, 'intensity')}
+      />
+      <NumericInputGroup
+        name="Penumbra"
+        label={t('editor:properties.spotLight.lbl-penumbra')}
+        min={0}
+        max={1}
+        smallStep={0.01}
+        mediumStep={0.1}
+        value={lightComponent.penumbra}
+        onChange={updateProperty(SpotLightComponent, 'penumbra')}
+      />
+      <RadianNumericInputGroup
+        name="Outer Cone Angle"
+        label={t('editor:properties.spotLight.lbl-angle')}
+        min={0}
+        max={90}
+        smallStep={0.1}
+        mediumStep={1}
+        largeStep={10}
+        value={lightComponent.angle}
+        onChange={updateProperty(SpotLightComponent, 'angle')}
+        unit="°"
+      />
+      <NumericInputGroup
+        name="Range"
+        label={t('editor:properties.spotLight.lbl-range')}
+        min={0}
+        smallStep={0.1}
+        mediumStep={1}
+        largeStep={10}
+        value={lightComponent.range}
+        onChange={updateProperty(SpotLightComponent, 'range')}
+        unit="m"
+      />
+      <NumericInputGroup
+        name="Decay"
+        label={t('editor:properties.spotLight.lbl-decay')}
+        min={0}
+        max={1}
+        smallStep={0.1}
+        mediumStep={1}
+        value={lightComponent.decay}
+        onChange={updateProperty(SpotLightComponent, 'decay')}
+      />
+      <LightShadowProperties node={props.node} comp={SpotLightComponent} />
+    </NodeEditor>
+  )
 }
 
-export default withTranslation()(SpotLightNodeEditor)
+SpotLightNodeEditor.iconComponent = AdjustIcon
+
+export default SpotLightNodeEditor

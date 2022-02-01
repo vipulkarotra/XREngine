@@ -1,9 +1,7 @@
-// @ts-ignore
-import React, { Component } from 'react'
-import PropTypes from 'prop-types'
+import React, { useState } from 'react'
 import Input from './Input'
 import styled from 'styled-components'
-import { Check } from '@styled-icons/fa-solid'
+import CheckIcon from '@mui/icons-material/Check'
 
 let uniqueId = 0
 
@@ -31,10 +29,11 @@ const StyledBooleanInput = (styled as any).input`
 const BooleanInputLabel = (styled as any)(Input).attrs(() => ({ as: 'label' }))`
   width: 18px;
   height: 18px;
-  margin: 4px;
   cursor: pointer;
-  display: block;
-  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0;
 `
 
 /**
@@ -43,57 +42,45 @@ const BooleanInputLabel = (styled as any)(Input).attrs(() => ({ as: 'label' }))`
  * @author Robert Long
  * @type {styled component}
  */
-const BooleanCheck = (styled as any)(Check)`
-  position: absolute;
-  top: 3px;
-  left: 2px;
+const BooleanCheck = (styled as any)(CheckIcon)`
+  width: 100%;
+  height: auto;
   color: ${(props) => props.theme.blue};
 `
+
+interface BooleanInputProp {
+  id?: string
+  value: any
+  onChange: Function
+  disabled?: boolean
+}
 
 /**
  * BooleanInput component used to provide view for checkbox.
  *
  * @author Robert Long
- * @type {class component}
+ * @type {functional component}
  */
-export class BooleanInput extends Component {
-  // declaring propTypes for BooleanInput
-  static propTypes = {
-    value: PropTypes.bool,
-    onChange: PropTypes.func
-  }
-
-  // initializing defaultProps  for BooleanInput
-  static defaultProps = {
-    value: false,
-    onChange: () => {}
-  }
-
+export const BooleanInput = (props: BooleanInputProp) => {
   //initializing checkboxId for BooleanInput
-  constructor(props) {
-    super(props)
-    this.checkboxId = `boolean-input-${uniqueId++}`
-  }
-
-  // declaring checkboxId
-  checkboxId: string
+  const [checkboxId, setCheckboxId] = useState(`boolean-input-${uniqueId++}`)
 
   // function handling changes in BooleanInput
-  onChange = (e) => {
-    ;(this.props as any).onChange(e.target.checked)
+  const onChange = (e) => {
+    props?.onChange(e.target.checked)
   }
 
-  render() {
-    //initializing variables using props of component
-    const { value, onChange, ...rest } = this.props as any
-
-    // returing view for BooleanInput component
-    return (
-      <div>
-        <StyledBooleanInput {...rest} id={this.checkboxId} type="checkbox" checked={value} onChange={this.onChange} />
-        <BooleanInputLabel htmlFor={this.checkboxId}>{value && <BooleanCheck size={12} />}</BooleanInputLabel>
-      </div>
-    )
-  }
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+      <StyledBooleanInput id={checkboxId} type="checkbox" checked={props.value} onChange={onChange} />
+      <BooleanInputLabel htmlFor={checkboxId}>{props.value && <BooleanCheck size={12} />}</BooleanInputLabel>
+    </div>
+  )
 }
+
 export default BooleanInput
+
+BooleanInput.defaultProps = {
+  value: false,
+  onChange: () => {}
+}

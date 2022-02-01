@@ -22,13 +22,13 @@ export class Message extends Service {
    */
   async create(data: any, params: Params): Promise<any> {
     let channel, channelId
-    let userIdList = []
+    let userIdList: any[] = []
     const loggedInUser = extractLoggedInUserFromParams(params)
-    const userId = loggedInUser?.userId
-
+    const userId = loggedInUser?.id
     const targetObjectId = data.targetObjectId
     const targetObjectType = data.targetObjectType
     const channelModel = (this.app.service('channel') as any).Model
+    console.log(data)
 
     if (targetObjectType === 'user') {
       const targetUser = await this.app.service('user').get(targetObjectId)
@@ -84,7 +84,7 @@ export class Message extends Service {
         return groupUser.userId
       })
     } else if (targetObjectType === 'party') {
-      const targetParty = await this.app.service('party').get(targetObjectId)
+      const targetParty = await this.app.service('party').get(targetObjectId, null!)
       if (targetParty == null) {
         throw new BadRequest('Invalid target party ID')
       }

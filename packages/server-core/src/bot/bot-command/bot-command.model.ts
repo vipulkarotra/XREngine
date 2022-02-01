@@ -1,7 +1,7 @@
 import { DataTypes, Sequelize } from 'sequelize'
 import { Application } from '../../../declarations'
 
-export default (app: Application): any => {
+export default (app: Application) => {
   const sequelizeClient: Sequelize = app.get('sequelizeClient')
   const BotCommand = sequelizeClient.define(
     'botCommand',
@@ -14,7 +14,8 @@ export default (app: Application): any => {
       },
       name: {
         type: DataTypes.STRING,
-        allowNull: false
+        allowNull: false,
+        unique: true
       },
       description: {
         type: DataTypes.STRING,

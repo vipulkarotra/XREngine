@@ -1,12 +1,12 @@
 import React from 'react'
-import Paper from '@material-ui/core/Paper'
-import InputBase from '@material-ui/core/InputBase'
-import { IconButton } from '@material-ui/core'
-import SearchIcon from '@material-ui/icons/Search'
-import { useStyle, useStyles } from './styles'
+import Paper from '@mui/material/Paper'
+import InputBase from '@mui/material/InputBase'
+import { IconButton } from '@mui/material'
+import SearchIcon from '@mui/icons-material/Search'
+import { useSceneStyle, useSceneStyles } from './styles'
 
 const SearchScene = () => {
-  const classes = useStyles()
+  const classes = useSceneStyles()
   return (
     <Paper component="form" className={classes.searchRoot}>
       <InputBase
@@ -14,7 +14,7 @@ const SearchScene = () => {
         placeholder={`Search for Scenes`}
         inputProps={{ 'aria-label': 'search for scenes ' }}
       />
-      <IconButton type="submit" className={classes.iconButton} aria-label="search">
+      <IconButton type="submit" className={classes.iconButton} aria-label="search" size="large">
         <SearchIcon />
       </IconButton>
     </Paper>

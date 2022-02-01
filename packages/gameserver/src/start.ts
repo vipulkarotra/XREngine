@@ -4,8 +4,9 @@ import logger from '@xrengine/server-core/src/logger'
 import config from '@xrengine/server-core/src/appconfig'
 import psList from 'ps-list'
 import { exec } from 'child_process'
-import preloadLocation from './preload-location'
+// import preloadLocation from './preload-location'
 import { createApp } from './app'
+import { Application } from '@xrengine/server-core/declarations'
 
 /**
  * @param status
@@ -14,7 +15,7 @@ import { createApp } from './app'
 process.on('unhandledRejection', (error, promise) => {
   console.error('UNHANDLED REJECTION - Promise: ', promise, ', Error: ', error, ').')
 })
-export const start = async (): Promise<void> => {
+export const start = async (): Promise<Application> => {
   const app = createApp()
 
   const key = process.platform === 'win32' ? 'name' : 'cmd'
@@ -23,11 +24,11 @@ export const start = async (): Promise<void> => {
       await psList()
     ).filter((e) => {
       const regexp = /docker-compose up|docker-proxy|mysql/gi
-      return e[key].match(regexp)
+      return e[key]?.match(regexp)
     })
-    const dockerProcess = processList.find((c) => c[key].match(/docker-compose/))
-    const dockerProxy = processList.find((c) => c[key].match(/docker-proxy/))
-    const processMysql = processList.find((c) => c[key].match(/mysql/))
+    const dockerProcess = processList.find((c) => c[key]?.match(/docker-compose/))
+    const dockerProxy = processList.find((c) => c[key]?.match(/docker-proxy/))
+    const processMysql = processList.find((c) => c[key]?.match(/mysql/))
     const databaseService = (dockerProcess && dockerProxy) || processMysql
 
     if (!databaseService) {
@@ -50,10 +51,13 @@ export const start = async (): Promise<void> => {
   const certOptions = {
     key: useSSL ? fs.readFileSync(certKeyPath) : null,
     cert: useSSL ? fs.readFileSync(certPath) : null
-  }
-  if (useSSL) logger.info('Starting server with HTTPS')
-  else logger.warn("Starting server with NO HTTPS, if you meant to use HTTPS try 'sudo bash generate-certs'")
+  } as any
   const port = config.gameserver.port
+  if (useSSL) console.log('Starting gameserver with HTTPS on', port)
+  else
+    console.log(
+      `Starting gameserver with NO HTTPS on ${port}, if you meant to use HTTPS try 'sudo bash generate-certs'`
+    )
 
   // http redirects for development
   if (useSSL) {
@@ -76,13 +80,13 @@ export const start = async (): Promise<void> => {
 
   if (useSSL === true) app.setup(server)
 
-  if (config.gameserver.locationName != null) {
-    console.log('PRELOADING WORLD WITH LOCATION NAME', config.gameserver.locationName)
-    preloadLocation(config.gameserver.locationName, app)
-  }
+  // if (config.gameserver.locationName != null) {
+  //   console.log('PRELOADING WORLD WITH LOCATION NAME', config.gameserver.locationName)
+  //   preloadLocation(config.gameserver.locationName, app)
+  // }
 
   process.on('unhandledRejection', (reason, p) => logger.error('Unhandled Rejection at: Promise ', p, reason))
-  // if (process.env.NODE_ENV === 'production' && fs.existsSync('/var/log')) {
+  // if (process.env.APP_ENV === 'production' && fs.existsSync('/var/log')) {
   //   try {
   //     console.log("Writing access log to ", '/var/log/api.access.log');
   //     const access = fs.createWriteStream('/var/log/api.access.log');
@@ -98,4 +102,6 @@ export const start = async (): Promise<void> => {
   server.on('listening', () =>
     logger.info('Feathers application started on %s://%s:%d', useSSL ? 'https' : 'http', config.server.hostname, port)
   )
+
+  return app
 }

@@ -1,15 +1,17 @@
 export const scopeTypeSeed = {
   path: 'scope-type',
-  randomize: false,
   templates: [
+    {
+      type: 'routes:read'
+    },
+    {
+      type: 'routes:write'
+    },
     {
       type: 'location:read'
     },
     {
       type: 'location:write'
-    },
-    {
-      type: 'scene:write'
     },
     {
       type: 'static_resource:read'
@@ -31,6 +33,51 @@ export const scopeTypeSeed = {
     },
     {
       type: 'globalAvatars:write'
+    },
+    {
+      type: 'benchmarking:read'
+    },
+    {
+      type: 'benchmarking:write'
+    },
+    {
+      type: 'groups:read'
+    },
+    {
+      type: 'groups:write'
+    },
+    {
+      type: 'instance:read'
+    },
+    {
+      type: 'instance:write'
+    },
+    {
+      type: 'invite:read'
+    },
+    {
+      type: 'party:read'
+    },
+    {
+      type: 'party:write'
+    },
+    {
+      type: 'user:read'
+    },
+    {
+      type: 'user:write'
+    },
+    {
+      type: 'scene:read'
+    },
+    {
+      type: 'scene:write'
+    },
+    {
+      type: 'projects:read'
+    },
+    {
+      type: 'projects:write'
     }
   ]
 }

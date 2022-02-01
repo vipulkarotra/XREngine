@@ -1,8 +1,9 @@
 aws/
+awscliv2.zip
 .git/
-*Dockerfile*
 *docker-compose*
 node_modules
+kubectl
 lib/
 packages/client/dist
 packages/native-plugin-example
@@ -12,6 +13,8 @@ readme/
 tests/
 vendor/
 packages/**/node_modules
+package-lock.json
+packages/**/package-lock.json
 
 
 kubernetes/**

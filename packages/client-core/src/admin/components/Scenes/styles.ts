@@ -1,6 +1,9 @@
-import { createStyles, makeStyles, Theme } from '@material-ui/core/styles'
+import { Theme } from '@mui/material/styles'
 
-export const useStyles = makeStyles((theme: Theme) =>
+import createStyles from '@mui/styles/createStyles'
+import makeStyles from '@mui/styles/makeStyles'
+
+export const useSceneStyles = makeStyles((theme: Theme) =>
   createStyles({
     marginBottom: {
       marginBottom: '10px'
@@ -110,15 +113,37 @@ export const useStyles = makeStyles((theme: Theme) =>
     },
     table: {
       minWidth: 650
+    },
+    headingFont: {
+      width: '100%',
+      [theme.breakpoints.down('md')]: {
+        fontSize: '1.6rem'
+      },
+      [theme.breakpoints.between(100, 0)]: {
+        fontSize: '1.4rem'
+      }
+    },
+    typoFont: {
+      width: '100%',
+      [theme.breakpoints.down('md')]: {
+        fontSize: '1.3rem'
+      }
+    },
+    typoFontsm: {
+      width: '100%',
+      [theme.breakpoints.down('md')]: {
+        fontSize: '1.05rem'
+      }
     }
   })
 )
 
-export const useStyle = makeStyles({
+export const useSceneStyle = makeStyles({
   paper: {
     width: '60%',
     backgroundColor: '#43484F',
-    color: '#f1f1f1'
+    color: '#f1f1f1',
+    overflow: 'hidden'
   },
   sceneInfo: {
     marginTop: '5%',
@@ -145,7 +170,7 @@ export const useStyle = makeStyles({
       '0px 3px 1px -2px rgb(0 0 0 / 20%), 0px 2px 2px 0px rgb(0 0 0 / 14%), 0px 1px 5px 0px rgb(0 0 0 / 12%) !important'
   },
   container: {
-    maxHeight: '80vh'
+    maxHeight: '73vh'
   },
   groupContainer: {
     overflowY: 'scroll',

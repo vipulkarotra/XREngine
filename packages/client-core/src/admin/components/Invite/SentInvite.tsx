@@ -1,61 +1,45 @@
 import React from 'react'
-import Table from '@material-ui/core/Table'
-import TableBody from '@material-ui/core/TableBody'
-import TableCell from '@material-ui/core/TableCell'
-import TableContainer from '@material-ui/core/TableContainer'
-import TableHead from '@material-ui/core/TableHead'
-import TableRow from '@material-ui/core/TableRow'
-import {
-  retrieveReceivedInvites,
-  retrieveSentInvites,
-  sendInvite,
-  removeInvite
-} from '../../../social/reducers/invite/service'
-import { makeStyles, createStyles, Theme, useTheme } from '@material-ui/core/styles'
-import { selectInviteState } from '../../../social/reducers/invite/selector'
-import { bindActionCreators, Dispatch } from 'redux'
-import { connect } from 'react-redux'
-import { Delete } from '@material-ui/icons'
+import Table from '@mui/material/Table'
+import TableBody from '@mui/material/TableBody'
+import TableCell from '@mui/material/TableCell'
+import TableContainer from '@mui/material/TableContainer'
+import TableHead from '@mui/material/TableHead'
+import TableRow from '@mui/material/TableRow'
+import { InviteService } from '../../../social/services/InviteService'
+import { Theme, useTheme } from '@mui/material/styles'
+import makeStyles from '@mui/styles/makeStyles'
+import createStyles from '@mui/styles/createStyles'
+import { useInviteState } from '../../../social/services/InviteService'
+import { useDispatch } from '../../../store'
+import { Delete } from '@mui/icons-material'
 import { useConfirm } from 'material-ui-confirm'
-import IconButton from '@material-ui/core/IconButton'
-import FirstPageIcon from '@material-ui/icons/FirstPage'
-import KeyboardArrowLeft from '@material-ui/icons/KeyboardArrowLeft'
-import KeyboardArrowRight from '@material-ui/icons/KeyboardArrowRight'
-import LastPageIcon from '@material-ui/icons/LastPage'
-import TableFooter from '@material-ui/core/TableFooter'
-import TablePagination from '@material-ui/core/TablePagination'
+import IconButton from '@mui/material/IconButton'
+import FirstPageIcon from '@mui/icons-material/FirstPage'
+import KeyboardArrowLeft from '@mui/icons-material/KeyboardArrowLeft'
+import KeyboardArrowRight from '@mui/icons-material/KeyboardArrowRight'
+import LastPageIcon from '@mui/icons-material/LastPage'
+import TableFooter from '@mui/material/TableFooter'
+import TablePagination from '@mui/material/TablePagination'
+import { INVITE_PAGE_LIMIT } from '../../../social/services/InviteService'
 
 interface Props {
-  receivedInvites?: any
-  retrieveReceivedInvites?: any
-  sendInvite?: any
   sentInvites?: any
+
   invites: any
-  removeInvite?: any
 }
-
-const mapStateToProps = (state: any): any => {
-  return {
-    receivedInvites: selectInviteState(state),
-    sentInvites: selectInviteState(state)
-  }
-}
-
-const mapDispatchToProps = (dispatch: Dispatch): any => ({
-  retrieveReceivedInvites: bindActionCreators(retrieveReceivedInvites, dispatch),
-  sendInvite: bindActionCreators(sendInvite, dispatch),
-  retrieveSentInvites: bindActionCreators(retrieveSentInvites, dispatch),
-  removeInvite: bindActionCreators(removeInvite, dispatch)
-})
 
 const useStyles = makeStyles({
   table: {
-    minWidth: 650
+    minWidth: 650,
+    background: '#43484F !important'
+  },
+  TableCellColor: {
+    color: '#f1f1f1'
   }
 })
 
-function createData(id: string, name: string, userRole: string, token: string, passcode: string, type: string) {
-  return { id, name, userRole, token, passcode, type }
+function createData(id: string, name: string, passcode: string, type: string) {
+  return { id, name, passcode, type }
 }
 
 const useStyles1 = makeStyles((theme: Theme) =>
@@ -97,16 +81,17 @@ function TablePaginationActions(props: TablePaginationActionsProps) {
 
   return (
     <div className={classes.root}>
-      <IconButton onClick={handleFirstPageButtonClick} disabled={page === 0} aria-label="first page">
+      <IconButton onClick={handleFirstPageButtonClick} disabled={page === 0} aria-label="first page" size="large">
         {theme.direction === 'rtl' ? <LastPageIcon /> : <FirstPageIcon />}
       </IconButton>
-      <IconButton onClick={handleBackButtonClick} disabled={page === 0} aria-label="previous page">
+      <IconButton onClick={handleBackButtonClick} disabled={page === 0} aria-label="previous page" size="large">
         {theme.direction === 'rtl' ? <KeyboardArrowRight /> : <KeyboardArrowLeft />}
       </IconButton>
       <IconButton
         onClick={handleNextButtonClick}
         disabled={page >= Math.ceil(count / rowsPerPage) - 1}
         aria-label="next page"
+        size="large"
       >
         {theme.direction === 'rtl' ? <KeyboardArrowLeft /> : <KeyboardArrowRight />}
       </IconButton>
@@ -114,6 +99,7 @@ function TablePaginationActions(props: TablePaginationActionsProps) {
         onClick={handleLastPageButtonClick}
         disabled={page >= Math.ceil(count / rowsPerPage) - 1}
         aria-label="last page"
+        size="large"
       >
         {theme.direction === 'rtl' ? <FirstPageIcon /> : <LastPageIcon />}
       </IconButton>
@@ -124,22 +110,24 @@ function TablePaginationActions(props: TablePaginationActionsProps) {
 const SentInvite = (props: Props) => {
   const classes = useStyles()
   const confirm = useConfirm()
-  const { invites, removeInvite } = props
+  const { invites } = props
   const [page, setPage] = React.useState(0)
-  const [rowsPerPage, setRowsPerPage] = React.useState(5)
-
+  const [rowsPerPage, setRowsPerPage] = React.useState(INVITE_PAGE_LIMIT)
+  const dispatch = useDispatch()
+  const inviteState = useInviteState()
+  const sentInviteCount = inviteState.sentInvites.total.value
   const rows = invites.map((el, index) =>
-    createData(el.id, el.invitee ? el.invitee.name : '', el.groupName, el.token, el.passcode, el.inviteType)
+    createData(el.id, el.invitee ? el.invitee.name : '', el.passcode, el.inviteType)
   )
   const deleteInvite = (invite) => {
     confirm({ description: `This will permanently delete ${invite.token}.` })
-      .then(() => removeInvite(invite))
+      .then(() => InviteService.removeInvite(invite))
       .catch(() => console.error('error'))
   }
 
-  const emptyRows = rowsPerPage - Math.min(rowsPerPage, rows.length - page * rowsPerPage)
-
   const handlePageChange = (event: React.MouseEvent<HTMLButtonElement> | null, newPage: number) => {
+    const incDec = page < newPage ? 'increment' : 'decrement'
+    InviteService.retrieveSentInvites(incDec)
     setPage(newPage)
   }
 
@@ -153,48 +141,46 @@ const SentInvite = (props: Props) => {
       <Table className={classes.table} aria-label="simple table">
         <TableHead>
           <TableRow>
-            <TableCell>Id</TableCell>
-            <TableCell align="right">Name</TableCell>
-            <TableCell align="right">Group Name</TableCell>
-            <TableCell align="right">Used Token</TableCell>
-            <TableCell align="right">Passcode</TableCell>
-            <TableCell align="right">Type</TableCell>
-            <TableCell align="right">Action</TableCell>
+            <TableCell className={classes.TableCellColor}>Id</TableCell>
+            <TableCell className={classes.TableCellColor} align="right">
+              Name
+            </TableCell>
+            <TableCell className={classes.TableCellColor} align="right">
+              Passcode
+            </TableCell>
+            <TableCell className={classes.TableCellColor} align="right">
+              Type
+            </TableCell>
+            <TableCell className={classes.TableCellColor} align="right">
+              Action
+            </TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
-          {(rowsPerPage > 0 ? rows.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage) : rows).map(
-            (row, index) => (
-              <TableRow key={`index_${index}`}>
-                <TableCell component="th" scope="row">
-                  {row.id}
-                </TableCell>
-                <TableCell align="right">{row.name}</TableCell>
-                <TableCell align="right">{row.userRole}</TableCell>
-                <TableCell align="right">{row.token}</TableCell>
-                <TableCell align="right">{row.passcode}</TableCell>
-                <TableCell align="right">{row.type}</TableCell>
-                <TableCell align="right">
-                  <a href="#h" onClick={() => deleteInvite(row)}>
-                    {' '}
-                    <Delete className="text-danger" />{' '}
-                  </a>
-                </TableCell>
-              </TableRow>
-            )
-          )}
-          {emptyRows > 0 && (
-            <TableRow style={{ height: 53 * emptyRows }}>
-              <TableCell colSpan={6} />
+          {rows.map((row, index) => (
+            <TableRow key={`index_${index}`}>
+              <TableCell component="th" scope="row">
+                {row.id}
+              </TableCell>
+              <TableCell align="right">{row.name}</TableCell>
+              <TableCell align="right">{row.passcode}</TableCell>
+              <TableCell align="right">{row.type}</TableCell>
+              <TableCell align="right">
+                <a href="#h" onClick={() => deleteInvite(row)}>
+                  {' '}
+                  <Delete className="text-danger" />{' '}
+                </a>
+              </TableCell>
             </TableRow>
-          )}
+          ))}
         </TableBody>
         <TableFooter>
           <TableRow>
             <TablePagination
-              rowsPerPageOptions={[5, 10, 25, { label: 'All', value: -1 }]}
+              rowsPerPageOptions={[INVITE_PAGE_LIMIT]}
+              component="td"
               colSpan={3}
-              count={rows.length}
+              count={sentInviteCount}
               rowsPerPage={rowsPerPage}
               page={page}
               SelectProps={{
@@ -212,4 +198,4 @@ const SentInvite = (props: Props) => {
   )
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(SentInvite)
+export default SentInvite

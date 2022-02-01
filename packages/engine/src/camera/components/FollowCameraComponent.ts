@@ -1,47 +1,50 @@
-import { CollisionGroups } from '../../physics/enums/CollisionGroups'
-import { RaycastQuery } from 'three-physx'
-import { createMappedComponent } from '../../ecs/functions/EntityFunctions'
+import { createMappedComponent } from '../../ecs/functions/ComponentFunctions'
 import { CameraMode } from '../types/CameraMode'
+import { Raycaster } from 'three'
 
 export type FollowCameraComponentType = {
   /** * **Default** value is ```'thirdPerson'```. */
   mode: CameraMode
-  /** * **Default** value is 3. */
+  /** Distance to the target  */
   distance: number
-  /** * **Default** value is 2. */
+  /** Desired zoom level  */
+  zoomLevel: number
+  /** Used internally */
+  zoomVelocity: { value: number }
+  /** Minimum distance to target */
   minDistance: number
-  /** * **Default** value is 7. */
+  /** Maximum distance to target */
   maxDistance: number
   /** Rotation around Y axis */
   theta: number
   /** Rotation around Z axis */
   phi: number
+  /** Minimum phi value */
+  minPhi: number
+  /** Maximum phi value */
+  maxPhi: number
   /** Whether looking over left or right shoulder */
   shoulderSide: boolean
   /** Whether the camera auto-rotates toward the target **Default** value is true. */
   locked: boolean
-  /** Camera physics raycast data */
-  raycastQuery: RaycastQuery
-  /** Camera physics raycast has hit */
-  rayHasHit: boolean
-  collisionMask: CollisionGroups
+  /** Camera raycaster */
+  raycaster: Raycaster
 }
 
 export const FollowCameraDefaultValues: FollowCameraComponentType = {
   mode: CameraMode.ThirdPerson,
-  distance: 3,
+  distance: 5,
+  zoomLevel: 5,
+  zoomVelocity: { value: 0 },
   minDistance: 2,
   maxDistance: 7,
-  theta: 0,
+  theta: Math.PI,
   phi: 0,
+  minPhi: -70,
+  maxPhi: 85,
   shoulderSide: true,
   locked: true,
-  raycastQuery: null,
-  rayHasHit: false,
-  collisionMask: CollisionGroups.Default
+  raycaster: new Raycaster()
 }
 
-export const FollowCameraComponent = createMappedComponent<FollowCameraComponentType>(
-  undefined,
-  FollowCameraDefaultValues
-)
+export const FollowCameraComponent = createMappedComponent<FollowCameraComponentType>('FollowCameraComponent')

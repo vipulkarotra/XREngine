@@ -1,87 +1,51 @@
-import { NativeTypes } from 'react-dnd-html5-backend'
-
-/**
- * ItemTypes object containing types of items used.
- *
- * @author Robert Long
- * @type {Object}
- */
-export const ItemTypes = {
-  File: NativeTypes.FILE,
-  Node: 'Node',
-  Model: 'Model',
-  Image: 'Image',
-  Video: 'Video',
-  Audio: 'Audio',
-  Volumetric: 'Volumetric',
-  Element: 'Element'
-}
-
-/**
- * AssetTypes array containing types of items used.
- *
- * @author Robert Long
- * @type {Array}
- */
-export const AssetTypes = [
-  ItemTypes.Model,
-  ItemTypes.Image,
-  ItemTypes.Video,
-  ItemTypes.Audio,
-  ItemTypes.Volumetric,
-  ItemTypes.Element
-]
-
-/**
- * isAsset function to check item exists in array types or not.
- *
- * @author Robert Long
- * @param {object} item
- */
-export function isAsset(item) {
-  return AssetTypes.indexOf(item.type) !== -1
-}
+import { CommandManager } from '../../managers/CommandManager'
+import EditorCommands from '../../constants/EditorCommands'
+import { SceneManager } from '../../managers/SceneManager'
+import { isAsset } from '../../constants/AssetTypes'
+import { EntityTreeNode } from '@xrengine/engine/src/ecs/classes/EntityTree'
+import { createEntity } from '@xrengine/engine/src/ecs/functions/EntityFunctions'
+import { getComponent } from '@xrengine/engine/src/ecs/functions/ComponentFunctions'
+import { TransformComponent } from '@xrengine/engine/src/transform/components/TransformComponent'
+import { Vector2 } from 'three'
 
 /**
  * addAssetOnDrop used to adding assets to the editor scene.
  *
  * @author Robert Long
- * @param {Object} editor
  * @param {Object} item
  * @param {Object} parent
  * @param {Object} before
  */
-export function addAssetOnDrop(editor, item, parent?, before?) {
-  if (isAsset(item)) {
-    const { nodeClass, initialProps } = item
-    const node = new nodeClass(editor)
-    if (initialProps) {
-      Object.assign(node, initialProps)
-    }
-    editor.addObject(node, parent, before)
-    return true
-  }
-  return false
+export function addItem(item: any, parent?: EntityTreeNode, before?: EntityTreeNode): boolean {
+  if (!isAsset(item)) return false
+
+  const entity = createEntity()
+
+  CommandManager.instance.executeCommandWithHistory(EditorCommands.ADD_OBJECTS, new EntityTreeNode(entity), {
+    prefabTypes: item.nodeClass,
+    parents: parent,
+    befores: before
+  })
+
+  return true
 }
 
 /**
- * addAssetAtCursorPositionOnDrop used to add element on editor scene position using cursor.
+ * addItemAtCursorPosition used to add element on editor scene position using cursor.
  *
  * @author Robert Long
- * @param {Object} editor
  * @param {Object} item
  * @param {Object} mousePos
  */
-export function addAssetAtCursorPositionOnDrop(editor, item, mousePos) {
-  if (isAsset(item)) {
-    const { nodeClass, initialProps } = item
-    const node = new nodeClass(editor)
-    if (initialProps) {
-      Object.assign(node, initialProps)
-    }
-    editor.getCursorSpawnPosition(mousePos, node.position)
-    editor.addObject(node)
-    return true
-  }
-  return false
+export function addItemAtCursorPosition(item, mousePos: Vector2): void {
+  if (!isAsset(item)) return
+
+  const entity = createEntity()
+
+  CommandManager.instance.executeCommandWithHistory(EditorCommands.ADD_OBJECTS, new EntityTreeNode(entity), {
+    prefabTypes: item.nodeClass
+  })
+
+  const transformComponent = getComponent(entity, TransformComponent)
+  if (transformComponent) transformComponent.position = SceneManager.instance.getCursorSpawnPosition(mousePos)
 }

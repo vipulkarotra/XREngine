@@ -1,30 +1,18 @@
-import Avatar from '@material-ui/core/Avatar'
-import Button from '@material-ui/core/Button'
-import Container from '@material-ui/core/Container'
-import Grid from '@material-ui/core/Grid'
-import TextField from '@material-ui/core/TextField'
-import Typography from '@material-ui/core/Typography'
-import LockOutlinedIcon from '@material-ui/icons/LockOutlined'
-import { showDialog } from '../../../common/reducers/dialog/service'
-import { registerUserByEmail } from '../../reducers/auth/service'
+import Avatar from '@mui/material/Avatar'
+import Button from '@mui/material/Button'
+import Container from '@mui/material/Container'
+import Grid from '@mui/material/Grid'
+import TextField from '@mui/material/TextField'
+import Typography from '@mui/material/Typography'
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
+import { AuthService } from '../../services/AuthService'
 import React, { useState } from 'react'
-import { connect } from 'react-redux'
-import { bindActionCreators, Dispatch } from 'redux'
 import styles from './Auth.module.scss'
 import { useTranslation } from 'react-i18next'
 
-const mapDispatchToProps = (dispatch: Dispatch): any => ({
-  registerUserByEmail: bindActionCreators(registerUserByEmail, dispatch),
-  showDialog: bindActionCreators(showDialog, dispatch)
-})
-
-interface Props {
-  registerUserByEmail: typeof registerUserByEmail
-  showDialog: typeof showDialog
-}
+interface Props {}
 
 const SignUp = (props: Props): any => {
-  const { registerUserByEmail, showDialog } = props
   const initialState = {
     email: '',
     password: '',
@@ -40,7 +28,7 @@ const SignUp = (props: Props): any => {
 
   const handleRegister = (e: any): void => {
     e.preventDefault()
-    registerUserByEmail({
+    AuthService.registerUserByEmail({
       email: state.email,
       password: state.password
     })
@@ -111,4 +99,4 @@ const SignUp = (props: Props): any => {
 
 const SignUpWrapper = (props: any): any => <SignUp {...props} />
 
-export default connect(null, mapDispatchToProps)(SignUpWrapper)
+export default SignUpWrapper

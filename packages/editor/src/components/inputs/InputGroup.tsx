@@ -1,8 +1,9 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import styled from 'styled-components'
-import { QuestionCircle } from '@styled-icons/fa-regular/QuestionCircle'
+import Grid from '@mui/material/Grid'
 import { InfoTooltip } from '../layout/Tooltip'
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
+
 /**
  * Used to provide styles for InputGroupContainer div.
  *
@@ -25,7 +26,6 @@ export const InputGroupContainer = (styled as any).div`
 
   & > label {
     display: block;
-    width: 25%;
     color: ${(props) => props.theme.text2};
     padding-bottom: 2px;
     padding-top: 4px;
@@ -40,7 +40,43 @@ export const InputGroupContainer = (styled as any).div`
  */
 export const InputGroupContent = (styled as any).div`
   display: flex;
-  flex-direction: row;
+  justify-content: space-between;
+  flex-wrap: wrap;
+
+  &>*:first-child {
+    max-width: calc(100% - 23px)
+  }
+
+  & > label {
+    display: block;
+    width: 25%;
+    color: ${(props) => props.theme.text2};
+    padding-bottom: 2px;
+    padding-top: 4px;
+  }
+`
+
+export const InputGroupVerticalContainer = (styled as any).div`
+
+  ${(props) =>
+    props.disabled &&
+    `
+    pointer-events: none;
+    opacity: 0.3;
+  `}
+
+  & > label {
+    display: block;
+    width: 25%;
+    color: ${(props) => props.theme.text2};
+    padding-bottom: 2px;
+    padding-top: 4px;
+  }
+`
+
+export const InputGroupVerticalContent = (styled as any).div`
+  display: flex;
+  flex-direction: column;
   flex: 1;
   padding-left: 8px;
 `
@@ -51,14 +87,19 @@ export const InputGroupContent = (styled as any).div`
  *  @author Robert Long
  *  @type {styled component}
  */
-export const InputGroupInfoIcon = (styled as any)(QuestionCircle)`
-  width: 20px;
+export const InputGroupInfoIcon = (styled as any)(HelpOutlineIcon)`
+  width: 18px;
   display: flex;
-  padding-left: 8px;
+  margin-left: 5px;
   color: ${(props) => props.theme.blue};
   cursor: pointer;
   align-self: center;
 `
+
+interface InputGroupInfoProp {
+  info: string
+}
+
 /**
  * Used to render InfoTooltip component.
  *
@@ -66,7 +107,7 @@ export const InputGroupInfoIcon = (styled as any)(QuestionCircle)`
  * @param  {string} info
  * @constructor
  */
-export function InputGroupInfo({ info }) {
+export function InputGroupInfo({ info }: InputGroupInfoProp) {
   return (
     <InfoTooltip info={info}>
       <InputGroupInfoIcon />
@@ -80,8 +121,14 @@ export function InputGroupInfo({ info }) {
  * @author Robert Long
  * @type {Object}
  */
-InputGroupInfo.propTypes = {
-  info: PropTypes.string
+
+interface InputGroupProp {
+  name: string
+  children: any
+  disabled?: boolean
+  info?: string
+  label?: string
+  value?: any
 }
 
 /**
@@ -96,29 +143,22 @@ InputGroupInfo.propTypes = {
  * @param       {string} label
  * @constructor
  */
-export function InputGroup({ name, children, disabled, info, label, ...rest }) {
+export function InputGroup({ name, children, disabled, info, label, ...rest }: InputGroupProp) {
   return (
     <InputGroupContainer disabled={disabled} {...rest}>
-      <label>{label}:</label>
-      <InputGroupContent>
-        {children}
-        {info && <InputGroupInfo info={info} />}
-      </InputGroupContent>
+      <Grid container spacing={2}>
+        <Grid item xs={4}>
+          <label style={{ color: '#9FA4B5' }}>{label}:</label>
+        </Grid>
+        <Grid item xs={8}>
+          <InputGroupContent>
+            {children}
+            {info && <InputGroupInfo info={info} />}
+          </InputGroupContent>
+        </Grid>
+      </Grid>
     </InputGroupContainer>
   )
 }
 
-/**
- * Declaring proptoTtypes for InputGroup Component.
- *
- * @author Robert Long
- * @type {Object}
- */
-InputGroup.propTypes = {
-  name: PropTypes.string,
-  children: PropTypes.any,
-  disabled: PropTypes.bool,
-  className: PropTypes.string,
-  info: PropTypes.string
-}
 export default InputGroup

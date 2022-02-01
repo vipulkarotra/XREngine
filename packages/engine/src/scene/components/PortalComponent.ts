@@ -1,15 +1,19 @@
 import { Quaternion, Vector3, Euler, Mesh } from 'three'
-import { createMappedComponent } from '../../ecs/functions/EntityFunctions'
+import { Entity } from '../../ecs/classes/Entity'
+import { createMappedComponent } from '../../ecs/functions/ComponentFunctions'
 
 export type PortalComponentType = {
   location: string
   linkedPortalId: string
-  displayText: string
   isPlayerInPortal: boolean
-  previewMesh: Mesh
+  displayText: string
+  helper: Entity
+  // todo: refactor these
+  spawnPosition?: Vector3
+  spawnRotation?: Quaternion
   remoteSpawnPosition: Vector3
   remoteSpawnRotation: Quaternion
   remoteSpawnEuler: Euler
 }
 
-export const PortalComponent = createMappedComponent<PortalComponentType>()
+export const PortalComponent = createMappedComponent<PortalComponentType>('PortalComponent')

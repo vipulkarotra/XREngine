@@ -1,10 +1,15 @@
-import { TextureLoader } from 'three'
-import { RethrownError } from '@xrengine/engine/src/scene/functions/errors'
-// Texture loading function that returns a promise and uses the RethrownError class
-export default function loadTexture(src, textureLoader: any = new TextureLoader()) {
-  return new Promise((resolve, reject) => {
-    textureLoader.load(src, resolve, null, (error) =>
-      reject(new RethrownError(`Error loading texture "${src}"`, error))
-    )
+import { Texture, TextureLoader } from 'three'
+import { TGALoader } from '../loaders/tga/TGALoader'
+
+export default function loadTexture(src: string, textureLoader?: TextureLoader | TGALoader) {
+  let loader: TextureLoader | TGALoader = textureLoader!
+  if (!loader) {
+    loader = src.endsWith('tga') ? new TGALoader() : new TextureLoader()
+  }
+
+  return new Promise<Texture>((resolve, reject) => {
+    loader.load(src, resolve, undefined, (_) => {
+      reject(new Error(`Error loading texture "${src}"`))
+    })
   })
 }

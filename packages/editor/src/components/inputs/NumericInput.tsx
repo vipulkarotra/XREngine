@@ -1,9 +1,10 @@
-// @ts-ignore
-import React, { Component, createRef } from 'react'
+import React from 'react'
 import PropTypes from 'prop-types'
 import styled from 'styled-components'
-import { getStepSize, toPrecision } from '@xrengine/editor/src/functions/utils'
+import { getStepSize, toPrecision } from '../../functions/utils'
 import { clamp } from '@xrengine/engine/src/common/functions/MathLerpFunctions'
+import { useRef } from 'react'
+import { useState } from 'react'
 
 /**
  *
@@ -87,28 +88,66 @@ const NumericInputUnit = (styled as any).div`
   height: 22px;
 `
 
+interface NumericInputProp {
+  className?: any
+  unit?: any
+  displayPrecision?: any
+  value?: any
+  convertFrom?: any
+  precision?: number
+  mediumStep?: number
+  onChange?: Function
+  onCommit?: Function
+  smallStep?: number
+  largeStep?: number
+  min?: number
+  max?: number
+  convertTo?: any
+}
+
 /**
  * @author Robert Long
  */
-export class NumericInput extends Component {
-  constructor(props) {
-    super(props)
+const NumericInput = (props: NumericInputProp) => {
+  const [tempValue, setTempValue] = useState<string | null>(null)
+  const [focused, setFocused] = useState(false)
+  const inputEl = useRef<HTMLInputElement>(null)
 
-    this.state = { tempValue: null, focused: false }
-    this.inputEl = createRef()
+  const handleStep = (event, direction, focus = true) => {
+    const { smallStep, mediumStep, largeStep, min, max, precision, convertTo, onChange, onCommit } = props
+
+    const stepSize = event ? getStepSize(event, smallStep, mediumStep, largeStep) : mediumStep
+
+    const nextValue = parseFloat(inputEl?.current?.value ?? '0') + stepSize * direction
+    const clampedValue = min != null && max != null ? clamp(nextValue, min, max) : nextValue
+    const roundedValue = precision ? toPrecision(clampedValue, precision) : nextValue
+    const finalValue = convertTo(roundedValue)
+
+    if (onCommit) {
+      onCommit(finalValue)
+    } else {
+      onChange?.(finalValue)
+    }
+
+    setTempValue(
+      roundedValue.toLocaleString('fullwide', {
+        useGrouping: false,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: Math.abs(Math.log10(precision || 0)) + 1
+      })
+    )
+    setFocused(focus)
   }
 
-  inputEl: any
-
-  increment() {
-    this.handleStep(1, false)
+  const increment = () => {
+    handleStep(null, 1, false)
   }
 
-  decrement() {
-    this.handleStep(-1, false)
+  const decrement = () => {
+    handleStep(null, -1, false)
   }
 
-  handleKeyPress = (event) => {
+  const handleKeyPress = (event) => {
     let direction = 0
 
     if (event.key === 'ArrowUp') {
@@ -121,125 +160,94 @@ export class NumericInput extends Component {
 
     event.preventDefault()
 
-    this.handleStep(event, direction, true)
+    handleStep(event, direction, true)
   }
 
-  handleStep(event, direction, focus = true) {
-    const { smallStep, mediumStep, largeStep, min, max, precision, convertTo, onChange, onCommit } = this.props as any
-
-    const nextValue =
-      parseFloat(this.inputEl.current.value) + getStepSize(event, smallStep, mediumStep, largeStep) * direction
-    const clampedValue = clamp(nextValue, min, max)
-    const roundedValue = precision ? toPrecision(clampedValue, precision) : nextValue
-    const finalValue = convertTo(roundedValue)
-
-    if (onCommit) {
-      onCommit(finalValue)
-    } else {
-      onChange(finalValue)
-    }
-
-    this.setState({
-      tempValue: roundedValue.toLocaleString('fullwide', {
-        useGrouping: false,
-        minimumFractionDigits: 0,
-        maximumFractionDigits: Math.abs(Math.log10(precision)) + 1
-      }),
-      focused: focus
-    })
-  }
-
-  handleKeyDown = (event) => {
+  const handleKeyDown = (event) => {
     if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
       event.preventDefault()
     }
   }
 
-  handleChange = (event) => {
-    const { min, max, precision, convertTo, onChange } = this.props as any
+  const handleChange = (event) => {
+    const { min, max, precision, convertTo, onChange } = props
 
     const tempValue = event.target.value
 
-    this.setState({ tempValue, focused: true })
+    setTempValue(tempValue)
+    setFocused(true)
 
     const parsedValue = parseFloat(tempValue)
 
     if (!Number.isNaN(parsedValue)) {
-      const clampedValue = clamp(parsedValue, min, max)
+      const clampedValue = min != null && max != null ? clamp(parsedValue, min, max) : parsedValue
       const roundedValue = precision ? toPrecision(clampedValue, precision) : clampedValue
       const finalValue = convertTo(roundedValue)
-      onChange(finalValue)
+      onChange?.(finalValue)
     }
   }
 
-  handleFocus = () => {
-    const { value, convertFrom, precision } = this.props as any
-    this.setState(
-      {
-        tempValue: convertFrom(value).toLocaleString('fullwide', {
-          useGrouping: false,
-          minimumFractionDigits: 0,
-          maximumFractionDigits: Math.abs(Math.log10(precision)) + 1
-        }),
-        focused: true
-      },
-      () => {
-        this.inputEl.current.select()
-      }
+  const handleFocus = () => {
+    const { value, convertFrom, precision } = props
+
+    setTempValue(
+      convertFrom(value).toLocaleString('fullwide', {
+        useGrouping: false,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: Math.abs(Math.log10(precision || 0)) + 1
+      })
     )
+    setFocused(true)
+
+    inputEl?.current?.select()
   }
 
-  handleBlur = () => {
-    const { value, onCommit, onChange } = this.props as any
+  const handleBlur = () => {
+    const { value, onCommit, onChange } = props
 
-    this.setState({ tempValue: null, focused: false })
+    setTempValue(null)
+    setFocused(false)
 
     if (onCommit) {
       onCommit(value)
     } else {
-      onChange(value)
+      onChange?.(value)
     }
   }
 
-  render() {
-    const {
-      className,
-      unit,
-      smallStep,
-      mediumStep,
-      largeStep,
-      min,
-      max,
-      displayPrecision,
-      value,
-      convertTo,
-      convertFrom,
-      onChange,
-      onCommit,
-      ...rest
-    } = this.props as any
+  const {
+    className,
+    unit,
+    smallStep,
+    mediumStep,
+    largeStep,
+    min,
+    max,
+    displayPrecision,
+    value,
+    convertTo,
+    convertFrom,
+    onChange,
+    onCommit,
+    ...rest
+  } = props
 
-    return (
-      <NumericInputContainer>
-        <StyledNumericInput
-          {...rest}
-          unit={unit}
-          ref={this.inputEl}
-          value={
-            (this.state as any).focused
-              ? (this.state as any).tempValue
-              : toPrecisionString(convertFrom(value), displayPrecision)
-          }
-          onKeyUp={this.handleKeyPress}
-          onKeyDown={this.handleKeyDown}
-          onChange={this.handleChange}
-          onFocus={this.handleFocus}
-          onBlur={this.handleBlur}
-        />
-        {unit && <NumericInputUnit>{unit}</NumericInputUnit>}
-      </NumericInputContainer>
-    )
-  }
+  return (
+    <NumericInputContainer>
+      <StyledNumericInput
+        {...rest}
+        unit={unit}
+        innerRef={inputEl}
+        value={focused ? tempValue : toPrecisionString(convertFrom(value), displayPrecision)}
+        onKeyUp={handleKeyPress}
+        onKeyDown={handleKeyDown}
+        onChange={handleChange}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+      />
+      {unit && <NumericInputUnit>{unit}</NumericInputUnit>}
+    </NumericInputContainer>
+  )
 }
 
 ;(NumericInput as any).propTypes = {
@@ -257,6 +265,18 @@ export class NumericInput extends Component {
   convertFrom: PropTypes.func.isRequired,
   precision: PropTypes.number.isRequired,
   displayPrecision: PropTypes.number.isRequired
+}
+;(NumericInput as any).defaultProps = {
+  value: 0,
+  smallStep: 0.025,
+  mediumStep: 0.1,
+  largeStep: 0.25,
+  min: -Infinity,
+  max: Infinity,
+  displayPrecision: 0.001,
+  precision: Number.EPSILON,
+  convertTo: (value) => value,
+  convertFrom: (value) => value
 }
 ;(NumericInput as any).defaultProps = {
   value: 0,

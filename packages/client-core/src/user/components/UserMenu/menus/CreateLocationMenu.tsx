@@ -1,30 +1,30 @@
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useDispatch } from 'react-redux'
-import Typography from '@material-ui/core/Typography'
-import DeleteIcon from '@material-ui/icons/Delete'
-import ArrowBackIcon from '@material-ui/icons/ArrowBack'
-import Checkbox from '@material-ui/core/Checkbox'
-import FormControlLabel from '@material-ui/core/FormControlLabel'
-import Tooltip from '@material-ui/core/Tooltip'
-import Select from '@material-ui/core/Select'
-import MenuItem from '@material-ui/core/MenuItem'
-import Button from '@material-ui/core/Button'
-import TextField from '@material-ui/core/TextField'
-import InputLabel from '@material-ui/core/InputLabel'
-import FormControl from '@material-ui/core/FormControl'
-import FormHelperText from '@material-ui/core/FormHelperText'
+import { useDispatch } from '../../../../store'
+import Typography from '@mui/material/Typography'
+import DeleteIcon from '@mui/icons-material/Delete'
+import ArrowBackIcon from '@mui/icons-material/ArrowBack'
+import Checkbox from '@mui/material/Checkbox'
+import FormControlLabel from '@mui/material/FormControlLabel'
+import Tooltip from '@mui/material/Tooltip'
+import Select from '@mui/material/Select'
+import MenuItem from '@mui/material/MenuItem'
+import Button from '@mui/material/Button'
+import TextField from '@mui/material/TextField'
+import InputLabel from '@mui/material/InputLabel'
+import FormControl from '@mui/material/FormControl'
+import FormHelperText from '@mui/material/FormHelperText'
 import { client } from '../../../../feathers'
-import { showAlert } from '../../../../common/reducers/alert/actions'
+import { AlertAction } from '../../../../common/services/AlertService'
 import styles from '../UserMenu.module.scss'
 import { Views } from '../util'
 
 const CreateLocationMenu = ({ location, changeActiveMenu, updateLocationDetail }) => {
   const { t } = useTranslation()
   const dispatch = useDispatch()
-  const [scenes, setScenes] = useState([])
+  const [scenes, setScenes] = useState<{ sid: string; name: string }[]>([])
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-  const [locationTypes, setLocationTypes] = useState([])
+  const [locationTypes, setLocationTypes] = useState<any>([])
   const [error, setError] = useState({
     name: '',
     maxUsersPerInstance: ''
@@ -71,7 +71,7 @@ const CreateLocationMenu = ({ location, changeActiveMenu, updateLocationDetail }
 
     upsertPromise
       .then((_) => {
-        dispatch(showAlert('success', t('user:usermenu.newLocation.success')))
+        dispatch(AlertAction.showAlert('success', t('user:usermenu.newLocation.success')))
         changeActiveMenu(Views.Location)
       })
       .catch((err) => {
@@ -80,7 +80,7 @@ const CreateLocationMenu = ({ location, changeActiveMenu, updateLocationDetail }
           return
         }
 
-        dispatch(showAlert('error', t('user:usermenu.newLocation.failure')))
+        dispatch(AlertAction.showAlert('error', t('user:usermenu.newLocation.failure')))
         console.error('Error =>', err)
       })
   }
@@ -90,11 +90,11 @@ const CreateLocationMenu = ({ location, changeActiveMenu, updateLocationDetail }
       .service('location')
       .remove(location.id)
       .then((_) => {
-        dispatch(showAlert('success', t('user:usermenu.newLocation.removeSuccess')))
+        dispatch(AlertAction.showAlert('success', t('user:usermenu.newLocation.removeSuccess')))
         changeActiveMenu(Views.Location)
       })
       .catch((err) => {
-        dispatch(showAlert('error', t('user:usermenu.newLocation.failure')))
+        dispatch(AlertAction.showAlert('error', t('user:usermenu.newLocation.failure')))
         console.error('Error =>', err)
       })
     setShowDeleteDialog(false)
@@ -211,7 +211,7 @@ const CreateLocationMenu = ({ location, changeActiveMenu, updateLocationDetail }
               name="videoEnabled"
             />
           }
-          label={t('user:usermenu.newLocation.lbl-ve')}
+          label={t('user:usermenu.newLocation.lbl-ve') as string}
         />
         <FormControlLabel
           className={styles.formControl}
@@ -224,14 +224,14 @@ const CreateLocationMenu = ({ location, changeActiveMenu, updateLocationDetail }
               name="instanceMediaChatEnabled"
             />
           }
-          label={t('user:usermenu.newLocation.lbl-gme')}
+          label={t('user:usermenu.newLocation.lbl-gme') as string}
         />
         <Button type="submit" className={styles.savebtn} onClick={saveDetails}>
           {location.id ? t('user:usermenu.newLocation.lbl-update') : t('user:usermenu.newLocation.lbl-create')}
         </Button>
         {location.id && (
           <Tooltip
-            title={location.isLobby ? t('user:usermenu.newLocation.tooltipCanNotBeDeleted') : ''}
+            title={location.isLobby ? (t('user:usermenu.newLocation.tooltipCanNotBeDeleted') as string) : ''}
             arrow
             placement="bottom"
             className={styles.tooltip}

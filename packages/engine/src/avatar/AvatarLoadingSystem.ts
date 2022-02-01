@@ -1,9 +1,7 @@
-import { Object3D, sRGBEncoding, Box3, Vector3 } from 'three'
+import { Object3D, Box3 } from 'three'
 import { Easing, Tween } from '@tweenjs/tween.js'
-import { defineQuery, defineSystem, enterQuery, exitQuery, Not, System } from 'bitecs'
-import { ECSWorld } from '../ecs/classes/World'
 
-import { getComponent, hasComponent, addComponent, removeComponent } from '../ecs/functions/EntityFunctions'
+import { getComponent, addComponent, removeComponent, defineQuery } from '../ecs/functions/ComponentFunctions'
 
 import { AssetLoader } from '../assets/classes/AssetLoader'
 
@@ -14,8 +12,8 @@ import { AvatarDissolveComponent } from './components/AvatarDissolveComponent'
 import { AvatarEffectComponent } from './components/AvatarEffectComponent'
 import { TweenComponent } from '../transform/components/TweenComponent'
 import { DissolveEffect } from './DissolveEffect'
-import { LocalInputReceiverComponent } from '../input/components/LocalInputReceiverComponent'
-import { isEntityLocalClient } from '../networking/functions/isEntityLocalClient'
+import { World } from '../ecs/classes/World'
+import { updateNearbyAvatars } from '../networking/systems/MediaStreamSystem'
 
 const lightScale = (y, r) => {
   return Math.min(1, Math.max(1e-3, y / r))
@@ -25,22 +23,19 @@ const lightOpacity = (y, r) => {
   return Math.min(1, Math.max(0, 1 - (y - r) * 0.5))
 }
 
-export const AvatarLoadingSystem = async (): Promise<System> => {
+export default async function AvatarLoadingSystem(world: World) {
   // precache dissolve effects
-  await AssetLoader.loadAsync({ url: '/itemLight.png' })
-  await AssetLoader.loadAsync({ url: '/itemPlate.png' })
+  AssetLoader.loadAsync({ url: '/itemLight.png' })
+  AssetLoader.loadAsync({ url: '/itemPlate.png' })
 
   const growQuery = defineQuery([AvatarEffectComponent, Object3DComponent, AvatarPendingComponent])
-  const growAddQuery = enterQuery(growQuery)
-  const growRemoveQuery = exitQuery(growQuery)
-
   const commonQuery = defineQuery([AvatarEffectComponent, Object3DComponent])
   const dissolveQuery = defineQuery([AvatarComponent, Object3DComponent, AvatarDissolveComponent])
 
-  return defineSystem((world: ECSWorld) => {
+  return () => {
     const { delta } = world
 
-    for (const entity of growAddQuery(world)) {
+    for (const entity of growQuery.enter(world)) {
       const object = getComponent(entity, Object3DComponent).value
       const plateComponent = getComponent(entity, AvatarEffectComponent)
 
@@ -52,11 +47,11 @@ export const AvatarLoadingSystem = async (): Promise<System> => {
       const light = apc.light
       const plate = apc.plate
 
-      const R = 0.6 * plate.geometry.boundingSphere.radius
+      const R = 0.6 * plate.geometry.boundingSphere?.radius!
       for (let i = 0, n = 5 + 10 * R * Math.random(); i < n; i += 1) {
         const ray = light.clone()
         ray.material = (<any>light.material).clone()
-        ray.position.y -= 2 * ray.geometry.boundingSphere.radius * Math.random()
+        ray.position.y -= 2 * ray.geometry.boundingSphere?.radius! * Math.random()
 
         var a = (2 * Math.PI * i) / n,
           r = R * Math.random()
@@ -74,7 +69,7 @@ export const AvatarLoadingSystem = async (): Promise<System> => {
       pt.rotation.x = -0.5 * Math.PI
 
       // if (isEntityLocalClient(entity)) {
-      //   removeComponent(entity, LocalInputReceiverComponent)
+      //   removeComponent(entity, LocalInputTagComponent)
       // }
 
       addComponent(entity, TweenComponent, {
@@ -99,7 +94,7 @@ export const AvatarLoadingSystem = async (): Promise<System> => {
       })
     }
 
-    for (const entity of growRemoveQuery(world)) {
+    for (const entity of growQuery.exit(world)) {
       // const plateComponent = getComponent(entity, AvatarEffectComponent)
       // addComponent(entity, TweenComponent, {
       //   tween: new Tween<any>(plateComponent)
@@ -120,8 +115,8 @@ export const AvatarLoadingSystem = async (): Promise<System> => {
       const object = getComponent(entity, Object3DComponent).value
       const opacityMultiplier = getComponent(entity, AvatarEffectComponent).opacityMultiplier
 
-      let pillar = null
-      let plate = null
+      let pillar: any = null!
+      let plate: any = null!
 
       const childrens = object.children
       for (let i = 0; i < childrens.length; i++) {
@@ -165,6 +160,9 @@ export const AvatarLoadingSystem = async (): Promise<System> => {
           })
         })
 
+        // TODO refacotr this
+        updateNearbyAvatars()
+
         addComponent(entity, TweenComponent, {
           tween: new Tween<any>(plateComponent)
             .to(
@@ -178,8 +176,8 @@ export const AvatarLoadingSystem = async (): Promise<System> => {
               removeComponent(entity, TweenComponent)
 
               const object = getComponent(entity, Object3DComponent).value
-              let pillar = null
-              let plate = null
+              let pillar: any = null!
+              let plate: any = null!
 
               const childrens = object.children
               for (let i = 0; i < childrens.length; i++) {
@@ -206,7 +204,7 @@ export const AvatarLoadingSystem = async (): Promise<System> => {
               removeComponent(entity, AvatarEffectComponent)
 
               // if (isEntityLocalClient(entity)) {
-              //   addComponent(entity, LocalInputReceiverComponent, {})
+              //   addComponent(entity, LocalInputTagComponent, {})
               // }
             })
         })
@@ -214,5 +212,5 @@ export const AvatarLoadingSystem = async (): Promise<System> => {
     }
 
     return world
-  })
+  }
 }

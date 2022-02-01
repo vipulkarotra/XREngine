@@ -1,13 +1,11 @@
-import React, { Component } from 'react'
+import React from 'react'
 import PropertyGroup from './PropertyGroup'
+import { EditorPropType } from './Util'
 
 //declaring NodeEditorProps
-type NodeEditorProps = {
-  name?: string
+type NodeEditorProps = EditorPropType & {
   description?: string
-  node?: object
-  editor?: object
-  disableTransform?: boolean
+  name?: string
 }
 
 /**
@@ -16,15 +14,14 @@ type NodeEditorProps = {
  * @author Robert Long
  * @type {class component}
  */
-export class NodeEditor extends Component<NodeEditorProps, {}> {
-  render() {
-    const { node, description, children } = this.props as any
-    return (
-      <PropertyGroup name={node.nodeName} description={description}>
-        {children}
-      </PropertyGroup>
-    )
-  }
+export const NodeEditor: React.FC<NodeEditorProps> = (props) => {
+  const { description, children, name } = props
+
+  return (
+    <PropertyGroup name={name} description={description}>
+      {children}
+    </PropertyGroup>
+  )
 }
 
 export default NodeEditor

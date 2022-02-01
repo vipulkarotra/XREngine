@@ -1,12 +1,13 @@
 // === SETUP WEBXR === //
 
 import { Quaternion, Vector3 } from 'three'
+import { XRInputSourceComponent } from '../../xr/components/XRInputSourceComponent'
 import { Engine } from '../../ecs/classes/Engine'
 import { EngineEvents } from '../../ecs/classes/EngineEvents'
-import { getComponent } from '../../ecs/functions/EntityFunctions'
-import { InputComponent } from '../../input/components/InputComponent'
-import { BaseInput } from '../../input/enums/BaseInput'
-import { Network } from '../../networking/classes/Network'
+import { getComponent } from '../../ecs/functions/ComponentFunctions'
+import { useWorld } from '../../ecs/functions/SystemHooks'
+import { dispatchLocal } from '../../networking/functions/dispatchFrom'
+import { EngineActions } from '../../ecs/classes/EngineService'
 
 export async function overrideXR() {
   // inject the webxr polyfill from the webxr emulator source - this is a script added by the bot
@@ -69,7 +70,7 @@ export function xrInitialized() {
 }
 
 export function startXR() {
-  EngineEvents.instance.dispatchEvent({ type: EngineEvents.EVENTS.XR_START })
+  dispatchLocal(EngineActions.xrStart() as any)
   EngineEvents.instance.dispatchEvent({
     type: 'webxr-pose',
     detail: {
@@ -77,7 +78,6 @@ export function startXR() {
       quaternion: [0, 0, 0, 1]
     }
   })
-  // )
   EngineEvents.instance.dispatchEvent({
     type: 'webxr-input-pose',
     detail: {
@@ -86,7 +86,6 @@ export function startXR() {
       quaternion: [0, 0, 0, 1]
     }
   })
-  // )
   EngineEvents.instance.dispatchEvent({
     type: 'webxr-input-pose',
     detail: {
@@ -95,7 +94,6 @@ export function startXR() {
       quaternion: [0, 0, 0, 1]
     }
   })
-  // )
 }
 
 /**
@@ -124,14 +122,14 @@ export function moveControllerStick(args) {
 
 // is in world space, so subtract player pos from it
 export function getXRInputPosition() {
-  const input = getComponent(Network.instance.localClientEntity, InputComponent)
-  const headInputValue = input.data.get(BaseInput.XR_HEAD)?.value
-  const leftControllerInputValue = input.data.get(BaseInput.XR_CONTROLLER_LEFT_HAND)?.value
-  const rightControllerInputValue = input.data.get(BaseInput.XR_CONTROLLER_RIGHT_HAND)?.value
+  const xrInputs = getComponent(useWorld().localClientEntity, XRInputSourceComponent)
+  const hmd = xrInputs.head.position.toArray().concat(xrInputs.head.quaternion.toArray())
+  const left = xrInputs.controllerLeft.position.toArray().concat(xrInputs.controllerLeft.quaternion.toArray())
+  const right = xrInputs.controllerRight.position.toArray().concat(xrInputs.controllerRight.quaternion.toArray())
   return {
-    headInputValue,
-    leftControllerInputValue,
-    rightControllerInputValue
+    headInputValue: hmd,
+    leftControllerInputValue: left,
+    rightControllerInputValue: right
   }
 }
 
@@ -165,7 +163,7 @@ export const getInputSourceRotation = (inputSource: InputSource) => {
   }
 }
 
-const tweens = []
+const tweens: any[] = []
 
 export const sendXRInputData = () => {
   tweens.forEach((call) => call())
@@ -206,7 +204,6 @@ export type InputSourceTweenProps = {
   quaternionTo: Quaternion
   callback: () => void
 }
-let last
 
 export function tweenXRInputSource(args: InputSourceTweenProps) {
   let counter = 0
@@ -220,9 +217,6 @@ export function tweenXRInputSource(args: InputSourceTweenProps) {
       args.callback()
     }
     counter++
-    const now = Date.now()
-    console.log(now - last)
-    last = now
   }
   tweens.push(tweenFunction)
 }

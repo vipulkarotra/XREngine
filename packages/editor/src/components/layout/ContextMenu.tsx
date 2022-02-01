@@ -7,22 +7,23 @@ import {
   MenuItem as _MenuItem,
   showMenu as _showMenu,
   SubMenu as _SubMenu,
-  ContextMenuTrigger as _ContextMenuTrigger
-} from 'react-contextmenu/dist/react-contextmenu'
-import { Theme, ThemeContext } from '../theme'
+  ContextMenuTrigger as _ContextMenuTrigger,
+  ContextMenuProps
+} from 'react-contextmenu'
+import { EditorTheme } from '@xrengine/client-core/src/util/theme'
 import { createGlobalStyle } from 'styled-components'
 export const connectMenu = _connectMenu
 export const MenuItem = _MenuItem
 export const showMenu = _showMenu
 export const SubMenu = _SubMenu
 export const ContextMenuTrigger = _ContextMenuTrigger
-// @ts-ignore
 
 /**
  *
  * @author Robert Long
+ * @author Abhishek Pathak
  */
-export const ContextMenuStyles = createGlobalStyle<{ theme: Theme }>`
+export const ContextMenuStyles = createGlobalStyle<{ theme: EditorTheme }>`
   .react-contextmenu {
     background-color: ${(props) => props.theme.dropdown};
     background-clip: padding-box;
@@ -35,6 +36,11 @@ export const ContextMenuStyles = createGlobalStyle<{ theme: Theme }>`
     pointer-events: none;
     text-align: left;
     box-shadow: ${(props) => props.theme.shadow30};
+  }
+
+  .react-contextmenu-wrapper {
+    height: calc(100% - 40px);
+    width:100%;
   }
 
   .react-contextmenu.react-contextmenu--visible {
@@ -100,12 +106,10 @@ export const ContextMenuStyles = createGlobalStyle<{ theme: Theme }>`
  * @param {any} rest
  * @returns
  */
-export const ContextMenu: React.FC<{ id: string }> = ({ children, id, ...rest }) => {
+export const ContextMenu = ({ children, ...rest }: React.PropsWithChildren<ContextMenuProps>) => {
   return (
     <>
-      <ReactContextMenu id={id} {...rest}>
-        {children}
-      </ReactContextMenu>
+      <ReactContextMenu {...rest}>{children}</ReactContextMenu>
       <ContextMenuStyles />
     </>
   )

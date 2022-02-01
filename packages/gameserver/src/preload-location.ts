@@ -1,11 +1,15 @@
-import { WorldScene } from '@xrengine/engine/src/scene/functions/SceneLoading'
-import { EngineEvents } from '@xrengine/engine/src/ecs/classes/EngineEvents'
-import { Application } from '@xrengine/server-core/declarations'
-import config from '@xrengine/server-core/src/appconfig'
-import getLocalServerIp from '@xrengine/server-core/src/util/get-local-server-ip'
+// import { WorldScene } from '@xrengine/engine/src/scene/functions/SceneLoading'
+// import { EngineEvents } from '@xrengine/engine/src/ecs/classes/EngineEvents'
+// import { Application } from '@xrengine/server-core/declarations'
+// import config from '@xrengine/server-core/src/appconfig'
+// import getLocalServerIp from '@xrengine/server-core/src/util/get-local-server-ip'
 
+// TODO: fix this file - currently unused (but nice to have)
+
+export {}
+/*
 export default async function (locationName, app: Application) {
-  await (app as any).isSetup
+  await app.isSetup
   let service, serviceId
   const locationResult = await app.service('location').find({
     query: {
@@ -21,8 +25,8 @@ export default async function (locationName, app: Application) {
   })
   if (scene == null) return
   const projectRegex = /\/([A-Za-z0-9]+)\/([a-f0-9-]+)$/
-  const projectResult = await app.service('project').get(scene.sid)
-  const projectUrl = projectResult.project_url
+  const projectResult = await app.service('scene').get(scene.sid, null!)
+  const projectUrl = projectResult.scene_url
   const regexResult = projectUrl.match(projectRegex)
   if (regexResult) {
     service = regexResult[1]
@@ -39,12 +43,12 @@ export default async function (locationName, app: Application) {
     }
   }, 1000)
 
-  await WorldScene.load(result, (left) => {
+  await loadSceneFromJSON(result, (left) => {
     entitiesLeft = left
   })
 
   clearInterval(loadingInterval)
-  const agonesSDK = (app as any).agonesSDK
+  const agonesSDK = app.agonesSDK
   const gsResult = await agonesSDK.getGameServer()
   const { status } = gsResult
   const localIp = await getLocalServerIp()
@@ -55,16 +59,16 @@ export default async function (locationName, app: Application) {
     ipAddress: config.gameserver.mode === 'local' ? `${localIp.ipAddress}:3031` : selfIpAddress,
     locationId: location.id
   } as any
-  ;(app as any).isChannelInstance = false
+  app.isChannelInstance = false
   const instanceResult = await app.service('instance').create(newInstance)
-  ;(app as any).instance = instanceResult
+  app.instance = instanceResult
 
-  if ((app as any).gsSubdomainNumber != null) {
-    const gsSubProvision = await app.service('gameserver-subdomain-provision').find({
+  if (app.gsSubdomainNumber != null) {
+    const gsSubProvision = (await app.service('gameserver-subdomain-provision').find({
       query: {
-        gs_number: (app as any).gsSubdomainNumber
+        gs_number: app.gsSubdomainNumber
       }
-    })
+    })) as any
 
     if (gsSubProvision.total > 0) {
       const provision = gsSubProvision.data[0]
@@ -80,3 +84,4 @@ export default async function (locationName, app: Application) {
   })
   console.log('Pre-loaded location', location.id)
 }
+*/

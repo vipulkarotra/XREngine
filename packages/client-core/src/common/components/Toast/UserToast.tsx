@@ -2,8 +2,8 @@ import React from 'react'
 import Toast from './Toast'
 import styles from './toast.module.scss'
 import { useTranslation } from 'react-i18next'
-import { accessUserState } from '../../../user/store/UserState'
-import { useState } from '@hookstate/core'
+import { accessUserState } from '../../../user/services/UserService'
+import { useState } from '@speigg/hookstate'
 
 const UserToast = () => {
   const toastMessages = useState(accessUserState().toastMessages).value

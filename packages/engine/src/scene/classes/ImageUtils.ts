@@ -24,7 +24,20 @@ import {
   WebGLRenderTarget
 } from 'three'
 import { WebGLRenderer } from 'three/src/renderers/WebGLRenderer'
-import { upload } from '@xrengine/engine/src/scene/functions/upload'
+
+export const ImageProjection = {
+  Flat: 'Flat',
+  Equirectangular360: 'Equirectangular360'
+}
+
+export const ImageAlphaMode = {
+  Opaque: 'Opaque' as const,
+  Blend: 'Blend' as const,
+  Mask: 'Mask' as const
+}
+
+export type ImageAlphaModeType = keyof typeof ImageAlphaMode
+export type ImageProjectionType = keyof typeof ImageProjection
 
 //#region CubemapToEquirectangular Shader
 const vertexShader = `
@@ -77,12 +90,12 @@ const fragmentShader = `
 //download the imagedata as png
 export const downloadImage = (imageData: ImageData, imageName = 'Image', width: number, height: number): void => {
   const canvas = document.createElement('canvas')
-  const ctx = canvas.getContext('2d')
+  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D
   canvas.width = width
   canvas.height = height
   ctx.putImageData(imageData, 0, 0)
   canvas.toBlob((blob) => {
-    const url = URL.createObjectURL(blob)
+    const url = URL.createObjectURL(blob!)
     const fileName = `${imageName}.png`
     const anchor = document.createElement('a')
     anchor.href = url
@@ -143,11 +156,11 @@ export const convertCubemapToEquiImageData = async (
   const imageData = new ImageData(new Uint8ClampedArray(pixels), width, height)
   if (returnAsBlob) {
     const canvas = document.createElement('canvas')
-    const ctx = canvas.getContext('2d')
+    const ctx = canvas.getContext('2d') as CanvasRenderingContext2D
     canvas.width = width
     canvas.height = height
     ctx.putImageData(imageData, 0, 0)
-    const blob = (await new Promise((resolve) => canvas.toBlob(resolve))) as Blob
+    const blob = (await new Promise((resolve) => canvas.toBlob(resolve as any))) as Blob
     return { blob }
   }
   return { imageData }
@@ -174,17 +187,4 @@ export const convertEquiToCubemap = (renderer: WebGLRenderer, source: Texture, s
   material.map = source
   cubecam.update(renderer, convertScene)
   return cubeRenderTarget
-}
-
-export const uploadCubemap = async (
-  renderer: WebGLRenderer,
-  source: WebGLCubeRenderTarget,
-  resoulution: number,
-  fileIdentifier?: string,
-  projectID?: any
-) => {
-  const blob = (await convertCubemapToEquiImageData(renderer, source, resoulution, resoulution, true)).blob
-  const value = (await upload(blob, null, null, fileIdentifier, projectID)) as any
-
-  return value
 }

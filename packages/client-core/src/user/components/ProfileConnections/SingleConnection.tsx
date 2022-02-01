@@ -1,62 +1,30 @@
-import Avatar from '@material-ui/core/Avatar'
-import Box from '@material-ui/core/Box'
-import Grid from '@material-ui/core/Grid'
-import Typography from '@material-ui/core/Typography'
+import Avatar from '@mui/material/Avatar'
+import Box from '@mui/material/Box'
+import Grid from '@mui/material/Grid'
+import Typography from '@mui/material/Typography'
 import { IdentityProviderSeed } from '@xrengine/common/src/interfaces/IdentityProvider'
-import { User } from '@xrengine/common/src/interfaces/User'
 import React, { useEffect, useState } from 'react'
-import { connect } from 'react-redux'
-import { bindActionCreators, Dispatch } from 'redux'
-import { showAlert } from '../../../common/reducers/alert/actions'
-import { showDialog } from '../../../common/reducers/dialog/service'
+import { useDispatch } from '../../../store'
+import { AlertAction } from '../../../common/services/AlertService'
+import { DialogAction } from '../../../common/services/DialogService'
 import MagicLinkEmail from '../Auth/MagicLinkEmail'
 import PasswordLogin from '../Auth/PasswordLogin'
-import { selectAuthState } from '../../reducers/auth/selector'
-import {
-  addConnectionByOauth,
-  addConnectionByPassword,
-  createMagicLink,
-  loginUserByPassword,
-  removeConnection
-} from '../../reducers/auth/service'
+import { AuthService } from '../../services/AuthService'
 import { ConnectionTexts } from './ConnectionTexts'
 import { useTranslation } from 'react-i18next'
 import styles from './ProfileConnections.module.scss'
+import { useAuthState } from '../../services/AuthService'
 
 interface Props {
   auth?: any
   classes?: any
-  connectionType?: 'facebook' | 'github' | 'google' | 'email' | 'sms' | 'password' | 'linkedin'
-
-  showDialog?: typeof showDialog
-  addConnectionByOauth?: typeof addConnectionByOauth
-  createMagicLink?: typeof createMagicLink
-  loginUserByPassword?: typeof loginUserByPassword
-  addConnectionByPassword?: typeof addConnectionByPassword
-  removeConnection?: typeof removeConnection
-  showAlert?: typeof showAlert
+  connectionType: 'facebook' | 'github' | 'google' | 'email' | 'sms' | 'password' | 'linkedin'
 }
-
-const mapStateToProps = (state: any): any => {
-  return {
-    auth: selectAuthState(state)
-  }
-}
-
-const mapDispatchToProps = (dispatch: Dispatch): any => ({
-  showDialog: bindActionCreators(showDialog, dispatch),
-  addConnectionByOauth: bindActionCreators(addConnectionByOauth, dispatch),
-  createMagicLink: bindActionCreators(createMagicLink, dispatch),
-  loginUserByPassword: bindActionCreators(loginUserByPassword, dispatch),
-  addConnectionByPassword: bindActionCreators(addConnectionByPassword, dispatch),
-  removeConnection: bindActionCreators(removeConnection, dispatch),
-  showAlert: bindActionCreators(showAlert, dispatch)
-})
 
 const SingleConnection = (props: Props): any => {
-  const { addConnectionByOauth, auth, classes, connectionType, removeConnection, showAlert, showDialog } = props
+  const { auth, classes, connectionType } = props
   const { t } = useTranslation()
-
+  const dispatch = useDispatch()
   const initialState = {
     identityProvider: IdentityProviderSeed,
     userId: ''
@@ -64,14 +32,14 @@ const SingleConnection = (props: Props): any => {
   const [state, setState] = useState(initialState)
 
   useEffect(() => {
-    const user = auth.get('user') as User
+    const user = useAuthState().user.value
     if (!user) {
       return
     }
 
     setState({
       ...state,
-      identityProvider: user.identityProviders.find((v) => v.type === connectionType)
+      identityProvider: user.identityProviders?.find((v) => v.type === connectionType) || IdentityProviderSeed
     })
   }, [])
 
@@ -79,11 +47,11 @@ const SingleConnection = (props: Props): any => {
     const identityProvider = state.identityProvider
     const authIdentityProvider = props.auth.get('authUser').identityProvider
     if (authIdentityProvider.id === identityProvider.id) {
-      showAlert('error', t('user:profile.connections.ipError'))
+      dispatch(AlertAction.showAlert('error', t('user:profile.connections.ipError')))
       return
     }
 
-    removeConnection(identityProvider.id, state.userId)
+    AuthService.removeConnection(identityProvider.id, state.userId)
   }
 
   const connect = (): any => {
@@ -93,25 +61,31 @@ const SingleConnection = (props: Props): any => {
       case 'facebook':
       case 'google':
       case 'github':
-        addConnectionByOauth(connectionType, userId)
+        AuthService.addConnectionByOauth(connectionType, userId)
         break
       case 'email':
-        showDialog({
-          children: <MagicLinkEmail type="email" isAddConnection={true} />
-        })
+        dispatch(
+          DialogAction.dialogShow({
+            children: <MagicLinkEmail type="email" isAddConnection={true} />
+          })
+        )
         break
       case 'sms':
-        showDialog({
-          children: <MagicLinkEmail type="sms" isAddConnection={true} />
-        })
+        dispatch(
+          DialogAction.dialogShow({
+            children: <MagicLinkEmail type="sms" isAddConnection={true} />
+          })
+        )
         break
       case 'password':
-        showDialog({
-          children: <PasswordLogin isAddConnection={true} />
-        })
+        dispatch(
+          DialogAction.dialogShow({
+            children: <PasswordLogin isAddConnection={true} />
+          })
+        )
         break
       case 'linkedin':
-        addConnectionByOauth(connectionType, userId)
+        AuthService.addConnectionByOauth(connectionType, userId)
         break
     }
   }
@@ -178,4 +152,4 @@ const SingleConnection = (props: Props): any => {
 
 const SingleConnectionWrapper = (props: Props): any => <SingleConnection {...props} />
 
-export default connect(mapStateToProps, mapDispatchToProps)(SingleConnectionWrapper)
+export default SingleConnectionWrapper

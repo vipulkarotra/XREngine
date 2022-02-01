@@ -1,66 +1,63 @@
-import { AmbientLight, PerspectiveCamera, Vector3 } from 'three'
+import { AmbientLight, PerspectiveCamera } from 'three'
 import { AssetLoader } from '../../assets/classes/AssetLoader'
-import { CameraLayers } from '../../camera/constants/CameraLayers'
-import { rotateViewVectorXZ } from '../../camera/systems/CameraSystem'
-import { AvatarComponent } from '../../avatar/components/AvatarComponent'
+import { ObjectLayers } from '../constants/ObjectLayers'
 import { AvatarControllerComponent } from '../../avatar/components/AvatarControllerComponent'
 import { Engine } from '../../ecs/classes/Engine'
 import { EngineEvents } from '../../ecs/classes/EngineEvents'
-import { addComponent, getComponent, removeComponent } from '../../ecs/functions/EntityFunctions'
-import { Network } from '../../networking/classes/Network'
+import { addComponent, getComponent, removeComponent, hasComponent } from '../../ecs/functions/ComponentFunctions'
 import { TransformComponent } from '../../transform/components/TransformComponent'
 import { PortalComponent } from '../components/PortalComponent'
 import { PortalEffect } from '../classes/PortalEffect'
 import { Object3DComponent } from '../components/Object3DComponent'
 import { delay } from '../../common/functions/delay'
-import { PhysXInstance } from 'three-physx'
 import { createAvatarController } from '../../avatar/functions/createAvatar'
-import { LocalInputReceiverComponent } from '../../input/components/LocalInputReceiverComponent'
+import { LocalInputTagComponent } from '../../input/components/LocalInputTagComponent'
 import { InteractorComponent } from '../../interaction/components/InteractorComponent'
-import { World } from '../../ecs/classes/World'
-import { processLocationChange } from '../../ecs/functions/EngineFunctions'
-import { FollowCameraComponent } from '../../camera/components/FollowCameraComponent'
+import { unloadScene } from '../../ecs/functions/EngineFunctions'
 import { switchCameraMode } from '../../avatar/functions/switchCameraMode'
 import { CameraMode } from '../../camera/types/CameraMode'
+import { useWorld } from '../../ecs/functions/SystemHooks'
+import { setObjectLayers } from './setObjectLayers'
+import { dispatchLocal } from '../../networking/functions/dispatchFrom'
+import { EngineActions, EngineActionType } from '../../ecs/classes/EngineService'
+import { receiveActionOnce } from '../../networking/functions/matchActionOnce'
 
 export const teleportToScene = async (
   portalComponent: ReturnType<typeof PortalComponent.get>,
-  handleNewScene: () => void
+  handleNewScene: () => Promise<void>
 ) => {
-  World.defaultWorld.isInPortal = true
-  EngineEvents.instance.dispatchEvent({ type: EngineEvents.EVENTS.ENABLE_SCENE, physics: false })
+  Engine.currentWorld!.isInPortal = true
+  dispatchLocal(EngineActions.enableScene({ physics: false }) as any)
   Engine.hasJoinedWorld = false
 
-  switchCameraMode(Network.instance.localClientEntity, { cameraMode: CameraMode.ShoulderCam }, true)
+  const world = useWorld()
+
+  switchCameraMode(world.localClientEntity, { cameraMode: CameraMode.ShoulderCam }, true)
 
   // remove controller since physics world will be destroyed and we don't want it moving
-  PhysXInstance.instance.removeController(
-    getComponent(Network.instance.localClientEntity, AvatarControllerComponent).controller
-  )
-  removeComponent(Network.instance.localClientEntity, AvatarControllerComponent)
-  removeComponent(Network.instance.localClientEntity, InteractorComponent)
-  removeComponent(Network.instance.localClientEntity, LocalInputReceiverComponent)
+  // world.physics.removeController(getComponent(world.localClientEntity, AvatarControllerComponent).controller)
 
-  const playerObj = getComponent(Network.instance.localClientEntity, Object3DComponent)
+  removeComponent(world.localClientEntity, AvatarControllerComponent)
+  removeComponent(world.localClientEntity, InteractorComponent)
+  removeComponent(world.localClientEntity, LocalInputTagComponent)
+
+  const playerObj = getComponent(world.localClientEntity, Object3DComponent)
   const texture = await AssetLoader.loadAsync({ url: '/hdr/galaxyTexture.jpg' })
 
   const hyperspaceEffect = new PortalEffect(texture)
   hyperspaceEffect.scale.set(10, 10, 10)
-  hyperspaceEffect.traverse((obj) => {
-    obj.layers.enable(CameraLayers.Portal)
-    obj.layers.disable(CameraLayers.Scene)
-  })
   hyperspaceEffect.position.copy(playerObj.value.position)
   hyperspaceEffect.quaternion.copy(playerObj.value.quaternion)
+  setObjectLayers(hyperspaceEffect, ObjectLayers.Render, ObjectLayers.Portal)
 
   const light = new AmbientLight('#aaa')
-  light.layers.enable(CameraLayers.Portal)
+  light.layers.enable(ObjectLayers.Portal)
   Engine.scene.add(light)
 
   Engine.scene.add(hyperspaceEffect)
 
   // TODO add an ECS thing somewhere to update this properly
-  const delta = 1 / 60
+  const { delta } = world
   const camera = Engine.scene.getObjectByProperty('isPerspectiveCamera', true as any) as PerspectiveCamera
   camera.zoom = 1.5
   const hyperSpaceUpdateInterval = setInterval(() => {
@@ -76,62 +73,56 @@ export const teleportToScene = async (
   }, delta * 1000)
 
   Engine.scene.background = null
-  Engine.camera.layers.enable(CameraLayers.Portal)
-  Engine.camera.layers.enable(CameraLayers.Avatar)
-  Engine.camera.layers.disable(CameraLayers.Scene)
+  Engine.camera.layers.enable(ObjectLayers.Portal)
+  Engine.camera.layers.enable(ObjectLayers.Avatar)
+  Engine.camera.layers.disable(ObjectLayers.Scene)
 
-  playerObj.value.traverse((obj) => {
-    obj.layers.enable(CameraLayers.Avatar)
-    obj.layers.disable(CameraLayers.Scene)
-  })
+  setObjectLayers(playerObj.value, ObjectLayers.Render, ObjectLayers.Avatar)
 
   // TODO: add BPCEM of old and new scenes and fade them in and out too
   await hyperspaceEffect.fadeIn(delta)
 
-  await processLocationChange()
+  await unloadScene()
   await handleNewScene()
 
-  await new Promise<void>((resolve) => {
+  await new Promise((resolve) => {
     Engine.hasJoinedWorld = true
-    EngineEvents.instance.once(EngineEvents.EVENTS.JOINED_WORLD, resolve)
-    EngineEvents.instance.dispatchEvent({ type: EngineEvents.EVENTS.ENABLE_SCENE, physics: true })
+    receiveActionOnce(EngineEvents.EVENTS.JOINED_WORLD, resolve)
+    dispatchLocal(EngineActions.enableScene({ physics: true }) as any)
   })
 
   await delay(100)
 
   // teleport player to where the portal is
-  const transform = getComponent(Network.instance.localClientEntity, TransformComponent)
+  const transform = getComponent(world.localClientEntity, TransformComponent)
   transform.position.set(
     portalComponent.remoteSpawnPosition.x,
     portalComponent.remoteSpawnPosition.y,
     portalComponent.remoteSpawnPosition.z
   )
 
-  const avatar = getComponent(Network.instance.localClientEntity, AvatarComponent)
-  rotateViewVectorXZ(avatar.viewVector, portalComponent.remoteSpawnEuler.y)
+  // const avatar = getComponent(world.localClientEntity, AvatarComponent)
+  // rotateViewVectorXZ(avatar.viewVector, portalComponent.remoteSpawnEuler.y)
 
-  createAvatarController(Network.instance.localClientEntity)
-  addComponent(Network.instance.localClientEntity, LocalInputReceiverComponent, {})
+  createAvatarController(world.localClientEntity)
+  addComponent(world.localClientEntity, LocalInputTagComponent, {})
 
   await delay(250)
 
-  Engine.camera.layers.enable(CameraLayers.Scene)
+  Engine.camera.layers.enable(ObjectLayers.Scene)
   light.removeFromParent()
   light.dispose()
 
   await hyperspaceEffect.fadeOut(delta)
 
-  playerObj.value.traverse((obj) => {
-    obj.layers.enable(CameraLayers.Scene)
-    obj.layers.disable(CameraLayers.Avatar)
-  })
+  setObjectLayers(playerObj.value, ObjectLayers.Render, ObjectLayers.Scene)
 
-  Engine.camera.layers.disable(CameraLayers.Portal)
-  Engine.camera.layers.disable(CameraLayers.Avatar)
+  Engine.camera.layers.disable(ObjectLayers.Portal)
+  Engine.camera.layers.disable(ObjectLayers.Avatar)
 
   hyperspaceEffect.removeFromParent()
 
   clearInterval(hyperSpaceUpdateInterval)
 
-  World.defaultWorld.isInPortal = false
+  Engine.currentWorld!.isInPortal = false
 }

@@ -1,11 +1,11 @@
 import React from 'react'
-import Card from '@material-ui/core/Card'
-import Typography from '@material-ui/core/Typography'
-import Grid from '@material-ui/core/Grid'
-import Paper from '@material-ui/core/Paper'
+import Card from '@mui/material/Card'
+import Typography from '@mui/material/Typography'
+import Grid from '@mui/material/Grid'
+import Paper from '@mui/material/Paper'
 import DisplayBots from './displayBots'
-import { Face, List } from '@material-ui/icons'
-import { useStylesForBots as useStyles } from './styles'
+import { List } from '@mui/icons-material'
+import { useStyles } from '../../styles/ui'
 import CreateBot from './CreateBot'
 
 const Bots = () => {
@@ -18,10 +18,11 @@ const Bots = () => {
         </Grid>
 
         <Grid item xs={12} md={6} sm={12}>
-          <Card className={classes.root}>
-            <Paper className={classes.header}>
-              <Typography className={classes.title}>
-                <List style={{ paddingTop: '5px' }} /> <span style={{ marginLeft: '10px' }}> XREngine bots </span>
+          <Card className={classes.botRoot}>
+            <Paper className={classes.botHeader}>
+              <Typography className={classes.botTitle}>
+                <List className={classes.pTop5} />
+                <span className={classes.mLeft10}> XREngine bots </span>
               </Typography>
             </Paper>
             <DisplayBots />

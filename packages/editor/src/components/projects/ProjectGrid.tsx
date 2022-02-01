@@ -1,12 +1,11 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import styled from 'styled-components'
 import ProjectGridItem from './ProjectGridItem'
-import { Row } from '../layout/Flex'
+import { FlexRow } from '../layout/Flex'
 import StringInput from '../inputs/StringInput'
 import { useHistory } from 'react-router-dom'
-import { Plus } from '@styled-icons/fa-solid/Plus'
 import { useTranslation } from 'react-i18next'
+import AddIcon from '@mui/icons-material/Add'
 
 /**
  *
@@ -16,7 +15,7 @@ const ProjectGridItemContainer = (styled as any).div`
   display: flex;
   flex-direction: column;
   color: ${(props) => props.theme.text};
-  height: 220px;
+  height: 200px;
   border-radius: 6px;
   text-decoration: none;
   background-color: ${(props) => props.theme.toolbar};
@@ -25,9 +24,9 @@ const ProjectGridItemContainer = (styled as any).div`
   border: 1px solid transparent;
 
   &:hover {
-    color: ${(props) => props.theme.text};
+    color: white;
     cursor: pointer;
-    border-color: ${(props) => props.theme.selected};
+    border-color: white;
   }
 
   svg {
@@ -44,27 +43,13 @@ const ProjectGridItemContainer = (styled as any).div`
  * @param {string} label
  * @returns
  */
-export function NewProjectGridItem({ path, label }: { path: string; label: string }) {
-  const history = useHistory()
-
-  const routeTo = (route: string) => () => {
-    history.push(route)
-  }
+export function NewProjectGridItem({ onClickNew, label }: { onClickNew: any; label: string }) {
   return (
-    <ProjectGridItemContainer as="button" onClick={routeTo(path)}>
-      <Plus />
+    <ProjectGridItemContainer as="button" onClick={onClickNew}>
+      <AddIcon />
       <h3>{label}</h3>
     </ProjectGridItemContainer>
   )
-}
-
-NewProjectGridItem.propTypes = {
-  path: PropTypes.oneOfType([PropTypes.string, PropTypes.object]).isRequired,
-  label: PropTypes.string.isRequired
-}
-
-NewProjectGridItem.defaultProps = {
-  label: 'New Project'
 }
 
 /**
@@ -82,16 +67,32 @@ export function LoadingProjectGridItem() {
   )
 }
 
+NewProjectGridItem.defaultProps = {
+  label: 'New Project'
+}
+
 /**
  *
  * @author Robert Long
  */
 const StyledProjectGrid = (styled as any).div`
   display: grid;
-  grid-gap: 20px;
+  grid-gap: 10px;
   width: 100%;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  margin-bottom: auto;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
 `
+
+interface ProjectGridProp {
+  projects?: any
+  projectName?: any
+  onClickExisting?: any
+  onClickNew?: any
+  newProjectLabel?: any
+  contextMenuId?: any
+  loading?: boolean
+  onSelectProject?: Function
+}
 
 /**
  *
@@ -103,24 +104,30 @@ const StyledProjectGrid = (styled as any).div`
  * @param {any} loading
  * @returns
  */
-export function ProjectGrid({ projects, newProjectPath, newProjectLabel, contextMenuId, loading }) {
+export function ProjectGrid({
+  projects,
+  projectName,
+  onClickExisting,
+  onClickNew,
+  newProjectLabel,
+  contextMenuId,
+  loading
+}: ProjectGridProp) {
   return (
     <StyledProjectGrid>
-      {newProjectPath && !loading && <NewProjectGridItem path={newProjectPath} label={newProjectLabel} />}
+      {onClickNew && !loading && <NewProjectGridItem onClickNew={onClickNew} label={newProjectLabel} />}
       {projects.map((project) => (
-        <ProjectGridItem key={project.project_id || project.id} project={project} contextMenuId={contextMenuId} />
+        <ProjectGridItem
+          onClickExisting={onClickExisting}
+          key={project.project_id || project.id || project.name}
+          project={project}
+          projectName={projectName}
+          contextMenuId={contextMenuId}
+        />
       ))}
       {loading && <LoadingProjectGridItem />}
     </StyledProjectGrid>
   )
-}
-
-ProjectGrid.propTypes = {
-  contextMenuId: PropTypes.string,
-  projects: PropTypes.arrayOf(PropTypes.object).isRequired,
-  newProjectPath: PropTypes.oneOfType([PropTypes.string, PropTypes.object]),
-  newProjectLabel: PropTypes.string,
-  loading: PropTypes.bool
 }
 
 /**
@@ -184,7 +191,7 @@ export const Separator = styled.div`
  *
  * @author Robert Long
  */
-export const ProjectGridHeaderRow = styled(Row)`
+export const ProjectGridHeaderRow = styled(FlexRow)`
   align-items: center;
 
   & > * {

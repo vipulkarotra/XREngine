@@ -1,3 +1,5 @@
+@import "../../../styles/imports.module.scss";
+
 .paper {
   margin-top: 40px;
   display: flex;
@@ -20,7 +22,7 @@
 }
 
 .MuiButton-contained.facebook {
-  background-color: #4267b2;
+  background-color: $FacebookBlue;
   color: white;
 }
 
@@ -31,6 +33,11 @@
 
 .MuiButton-contained.github {
   background-color: grey;
+  color: white;
+}
+
+.MuiButton-contained.discord {
+  background-color: black;
   color: white;
 }
 

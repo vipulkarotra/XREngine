@@ -1,21 +1,15 @@
 import React from 'react'
-import Grid from '@material-ui/core/Grid'
-import styles from '../Admin.module.scss'
-import Button from '@material-ui/core/Button'
-import Search from '../Search'
-import { makeStyles, Theme } from '@material-ui/core/styles'
+import Grid from '@mui/material/Grid'
+import Button from '@mui/material/Button'
+import Search from '../../common/Search'
 import PartyTable from './PartyTable'
 import CreateParty from './CreateParty'
-
-const useStyles = makeStyles((theme: Theme) => ({
-  marginBottom: {
-    marginBottom: '10px'
-  }
-}))
+import { useStyles } from '../../styles/ui'
 
 const Party = () => {
   const classes = useStyles()
   const [partyModelOpen, setPartyModelOpen] = React.useState(false)
+  const [search, setSearch] = React.useState('')
 
   const openModalCreate = () => {
     setPartyModelOpen(true)
@@ -24,27 +18,25 @@ const Party = () => {
   const handleCreatePartyClose = () => {
     setPartyModelOpen(false)
   }
+  const handleChange = (e: any) => {
+    setSearch(e.target.value)
+  }
 
   return (
     <div>
       <Grid container spacing={3} className={classes.marginBottom}>
         <Grid item xs={9}>
-          <Search typeName="party" />
+          <Search text="party" handleChange={handleChange} />
         </Grid>
-        {/*<Grid item xs={3}>*/}
-        {/*  <Button*/}
-        {/*    className={styles.createLocation}*/}
-        {/*    type="submit"*/}
-        {/*    variant="contained"*/}
-        {/*    color="primary"*/}
-        {/*    onClick={openModalCreate}*/}
-        {/*  >*/}
-        {/*    Create New Party*/}
-        {/*  </Button>*/}
-        {/*</Grid>*/}
+        <Grid item xs={3}>
+          <Button className={classes.createBtn} type="submit" variant="contained" onClick={() => openModalCreate()}>
+            Create New Party
+          </Button>
+        </Grid>
       </Grid>
-      <PartyTable />
-
+      <div className={classes.rootTableWithSearch}>
+        <PartyTable search={search} />
+      </div>
       <CreateParty open={partyModelOpen} handleClose={handleCreatePartyClose} />
     </div>
   )

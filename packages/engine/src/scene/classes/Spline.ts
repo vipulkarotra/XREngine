@@ -1,39 +1,21 @@
 import { Vector3, BufferGeometry, BufferAttribute, CatmullRomCurve3, Line, LineBasicMaterial, Object3D } from 'three'
 import { removeElementFromArray } from '@xrengine/common/src/utils/removeElementFromArray'
+import SplineHelper from './SplineHelper'
+import { ObjectLayers } from '../constants/ObjectLayers'
 
 export default class Spline extends Object3D {
   ARC_SEGMENTS = 200
   INIT_POINTS_COUNT = 2
 
-  _splineHelperObjects = []
+  _splineHelperObjects: Object3D[] = []
   _splinePointsLength = this.INIT_POINTS_COUNT
-  _positions = []
+  _positions: Vector3[] = []
   _point = new Vector3()
 
   _splines = {} as any
-  editor: any
 
-  _editor = null
-
-  helperNode: any
-
-  constructor(helperNode) {
-    super()
-    this.helperNode = helperNode
-  }
-
-  init(editor = null, loadedSplinePositions = null) {
-    /*******
-     * Curves
-     *********/
-
-    console.log('Spline Init')
-
-    if (loadedSplinePositions != null) {
-      this._splinePointsLength = loadedSplinePositions.length
-    }
-
-    this._editor = editor
+  init(loadedSplinePositions: Vector3[] = []) {
+    this._splinePointsLength = loadedSplinePositions.length
 
     for (let i = 0; i < this._splinePointsLength; i++) {
       this.addSplineObject(this._positions[i])
@@ -86,7 +68,7 @@ export default class Spline extends Object3D {
 
     for (const k in this._splines) {
       const spline = this._splines[k]
-      spline.mesh.layers.set(1)
+      spline.mesh.layers.set(ObjectLayers.NodeHelper)
       super.add(spline.mesh)
     }
 
@@ -100,12 +82,12 @@ export default class Spline extends Object3D {
     }
   }
 
-  getCurrentSplineHelperObjects() {
+  getCurrentSplineHelperObjects(): Object3D[] {
     return this._splineHelperObjects
   }
 
-  addSplineObject(position = null) {
-    const splineHelperNode = new this.helperNode(this._editor, this)
+  addSplineObject(position?: Vector3): SplineHelper {
+    const splineHelperNode = new SplineHelper()
     const object = splineHelperNode
 
     if (position) {
@@ -123,7 +105,7 @@ export default class Spline extends Object3D {
     return object
   }
 
-  addPoint() {
+  addPoint(): SplineHelper {
     this._splinePointsLength++
 
     const newSplineObject = this.addSplineObject()
@@ -134,7 +116,7 @@ export default class Spline extends Object3D {
     return newSplineObject
   }
 
-  removeLastPoint() {
+  removeLastPoint(): void {
     if (this._splinePointsLength <= this.INIT_POINTS_COUNT) {
       return
     }
@@ -148,7 +130,7 @@ export default class Spline extends Object3D {
     this.updateSplineOutline()
   }
 
-  removePoint(splineHelperNode) {
+  removePoint(splineHelperNode?: SplineHelper): void {
     if (this._splinePointsLength <= this.INIT_POINTS_COUNT) {
       return
     }
@@ -156,7 +138,7 @@ export default class Spline extends Object3D {
     removeElementFromArray(this._splineHelperObjects, splineHelperNode)
     this._splinePointsLength--
 
-    removeElementFromArray(this._positions, splineHelperNode.position)
+    if (splineHelperNode) removeElementFromArray(this._positions, splineHelperNode.position)
 
     // This is done from onRemove of editor
     // super.remove( splineHelperNode );
@@ -164,7 +146,7 @@ export default class Spline extends Object3D {
     this.updateSplineOutline()
   }
 
-  updateSplineOutline() {
+  updateSplineOutline(): void {
     for (const k in this._splines) {
       const spline = this._splines[k]
 
@@ -183,8 +165,8 @@ export default class Spline extends Object3D {
     }
   }
 
-  exportSpline() {
-    const strplace = []
+  exportSpline(): Vector3[] {
+    const strplace: Vector3[] = []
 
     for (let i = 0; i < this._splinePointsLength; i++) {
       const p = this._splineHelperObjects[i].position
@@ -194,7 +176,7 @@ export default class Spline extends Object3D {
     return strplace
   }
 
-  load(new_positions) {
+  load(new_positions: Vector3[]): void {
     while (new_positions.length > this._positions.length) {
       this.addPoint()
     }

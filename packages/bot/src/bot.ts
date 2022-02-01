@@ -1,7 +1,8 @@
 import { URL } from 'url'
 import puppeteer from 'puppeteer'
 import fs from 'fs'
-import { getOS } from '@xrengine/common/src/utils/getOS'
+import { getOS } from './utils/getOS'
+import { makeAdmin } from './utils/make-user-admin'
 
 class PageUtils {
   bot: XREngineBot
@@ -9,7 +10,7 @@ class PageUtils {
     this.bot = bot
   }
   async clickSelectorClassRegex(selector, classRegex) {
-    if (this.bot.autoLog) console.log(`Clicking for a ${selector} matching ${classRegex}`)
+    if (this.bot.verbose) console.log(`Clicking for a ${selector} matching ${classRegex}`)
 
     await this.bot.page.evaluate(
       (selector, classRegex) => {
@@ -23,7 +24,7 @@ class PageUtils {
     )
   }
   async clickSelectorId(selector, id) {
-    if (this.bot.autoLog) console.log(`Clicking for a ${selector} matching ${id}`)
+    if (this.bot.verbose) console.log(`Clicking for a ${selector} matching ${id}`)
 
     await this.bot.page.evaluate(
       (selector, id) => {
@@ -49,7 +50,7 @@ class PageUtils {
     )
   }
   async clickSelectorFirstMatch(selector) {
-    if (this.bot.autoLog) console.log(`Clicking for first ${selector}`)
+    if (this.bot.verbose) console.log(`Clicking for first ${selector}`)
 
     await this.bot.page.evaluate((selector) => {
       let matches = Array.from(document.querySelectorAll(selector))
@@ -60,9 +61,10 @@ class PageUtils {
 }
 
 type BotProps = {
+  verbose?: boolean
   headless?: boolean
+  gpu?: boolean
   name?: string
-  autoLog?: boolean
   fakeMediaPath?: string
   windowSize?: { width: number; height: number }
 }
@@ -73,8 +75,9 @@ type BotProps = {
 export class XREngineBot {
   activeChannel
   headless: boolean
+  ci: boolean
+  verbose: boolean
   name: string
-  autoLog: boolean
   fakeMediaPath: string
   windowSize: {
     width: number
@@ -85,11 +88,13 @@ export class XREngineBot {
   pageUtils: PageUtils
 
   constructor(args: BotProps = {}) {
+    this.verbose = args.verbose
     this.headless = args.headless ?? true
+    this.ci = typeof process.env.CI === 'string' && process.env.CI === 'true'
+    console.log('headless', this.headless)
     this.name = args.name ?? 'Bot'
-    this.autoLog = args.autoLog ?? true
     this.fakeMediaPath = args.fakeMediaPath ?? ''
-    this.windowSize = args.windowSize ?? { width: 1920, height: 1080 }
+    this.windowSize = args.windowSize ?? { width: 640, height: 480 }
 
     // for (let method of Object.getOwnPropertyNames(InBrowserBot.prototype))
     // {
@@ -123,6 +128,7 @@ export class XREngineBot {
   }
 
   async sendMessage(message) {
+    console.log('send message: ' + message)
     await this.clickElementByClass('button', 'openChat')
     await this.clickElementById('input', 'newMessage')
     await this.typeMessage(message)
@@ -222,7 +228,7 @@ export class XREngineBot {
     )
   }
 
-  async awaitPromise(fn, period = 1000 / 60, ...args) {
+  async awaitPromise(fn, period = 100, ...args) {
     return await new Promise<void>((resolve) => {
       const interval = setInterval(async () => {
         if (await this.page.evaluate(fn, ...args)) {
@@ -233,10 +239,22 @@ export class XREngineBot {
     })
   }
 
-  async awaitHookPromise(hook, period = 1000 / 60, ...args) {
+  async awaitHookPromise(hook, period = 100, ...args) {
+    console.log('[XR-BOT]: awaiting', hook, ...args)
     return await new Promise<void>((resolve) => {
       const interval = setInterval(async () => {
-        if (await this.runHook(hook, ...args)) {
+        if (
+          await this.page.evaluate(
+            async (hook, ...args) => {
+              if (!globalThis.botHooks) {
+                return
+              }
+              return globalThis.botHooks[hook](...args)
+            },
+            hook,
+            ...args
+          )
+        ) {
           resolve()
           clearInterval(interval)
         }
@@ -290,36 +308,41 @@ export class XREngineBot {
    *  directly in most cases. It will be done automatically when needed.
    */
   async launchBrowser() {
-    console.log('Launching browser')
     const options = {
+      dumpio: this.verbose,
       headless: this.headless,
       devtools: !this.headless,
       ignoreHTTPSErrors: true,
+      defaultViewport: this.windowSize,
+      ignoreDefaultArgs: ['--mute-audio'],
       args: [
+        this.headless ? '--headless' : '--enable-webgl',
+        '--enable-features=NetworkService',
+        '--ignore-certificate-errors',
+        `--no-sandbox`,
+        `--disable-dev-shm-usage`,
+        '--shm-size=4gb',
         `--window-size=${this.windowSize.width},${this.windowSize.height}`,
         '--use-fake-ui-for-media-stream=1',
         '--use-fake-device-for-media-stream=1',
-        `--use-file-for-fake-video-capture=${this.fakeMediaPath}/video.y4m`,
-        `--use-file-for-fake-audio-capture=${this.fakeMediaPath}/audio.wav`,
         '--disable-web-security=1',
-        //     '--use-fake-device-for-media-stream',
-        //     '--use-file-for-fake-video-capture=/Users/apple/Downloads/football_qcif_15fps.y4m',
-        //     // '--use-file-for-fake-audio-capture=/Users/apple/Downloads/BabyElephantWalk60.wav',
-        '--allow-file-access=1'
+        //'--no-first-run',
+        '--allow-file-access=1',
+        '--mute-audio'
       ],
-      defaultViewport: this.windowSize,
-      ignoreDefaultArgs: ['--mute-audio'],
       ...this.detectOsOption()
     }
-
-    if (this.headless) options.args.push('--disable-gpu')
 
     this.browser = await puppeteer.launch(options)
 
     this.page = await this.browser.newPage()
+    this.page.on('close', () => {
+      console.log('[XRENGINE BOT]: page closed')
+      this.page = undefined
+    })
 
-    if (this.autoLog) {
-      this.page.on('console', (consoleObj) => console.log('>> ', consoleObj.text()))
+    if (this.verbose) {
+      // this.page.on('console', (consoleObj) => console.log('>> ', consoleObj.text()))
     }
 
     // this.page
@@ -352,6 +375,7 @@ export class XREngineBot {
     await this.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60 * 1000 })
 
     const granted = await this.page.evaluate(async () => {
+      // @ts-ignore
       return (await navigator.permissions.query({ name: 'camera' })).state
     })
     console.log('Granted:', granted)
@@ -387,7 +411,7 @@ export class XREngineBot {
    */
   async enterLocation(roomUrl) {
     await this.navigate(roomUrl)
-    await this.page.waitForFunction("document.querySelector('canvas')", { timeout: 100000 })
+    await this.page.waitForFunction("document.querySelector('canvas')", { timeout: 1000000 })
     console.log('selected sucessfully')
     await this.page.mouse.click(0, 0)
     await this.setFocus('canvas')
@@ -399,6 +423,35 @@ export class XREngineBot {
     //         resolve();
     //     }, 30000)
     // }, 2000) });
+  }
+
+  /** Enters the editor scene specified
+   * @param {string} sceneUrl The url of the scene to load
+   */
+  async enterEditor(sceneUrl, loginUrl) {
+    await this.navigate(loginUrl)
+    await this.page.waitForFunction("document.querySelector('#show-id-btn')", { timeout: 1000000 })
+    await this.clickElementById('h2', 'show-id-btn')
+    await this.page.waitForFunction("document.querySelector('#user-id')", { timeout: 1000000 })
+    const userId = await new Promise((resolve) => {
+      const interval = setInterval(async () => {
+        const id = await this.page.evaluate(() => document.querySelector('#user-id').getAttribute('value'))
+        if (id !== '') {
+          clearInterval(interval)
+          resolve(id)
+        }
+      }, 100)
+    })
+    console.log(userId)
+    //TODO: We should change this from making admin to registered user.
+    await makeAdmin(userId)
+    await this.navigate(sceneUrl)
+    await this.page.mouse.click(0, 0)
+    await this.page.waitForFunction("document.querySelector('canvas')", { timeout: 1000000 })
+    console.log('selected sucessfully')
+    await this.page.mouse.click(0, 0)
+    await this.setFocus('canvas')
+    await this.clickElementById('canvas', 'viewport-canvas')
   }
 
   async waitForTimeout(timeout) {
@@ -418,6 +471,7 @@ export class XREngineBot {
   }
 
   async typeMessage(message) {
+    console.log('typing using keyboard')
     await this.page.keyboard.type(message)
   }
 

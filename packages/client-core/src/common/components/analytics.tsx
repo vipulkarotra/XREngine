@@ -1,11 +1,11 @@
 // TODO: Add config var for analytics ID
-import ReactGA from 'react-ga'
+import ReactGA from 'react-ga4'
 
 export const initGA = () => {
-  ReactGA.initialize('UA-164023274-1')
+  if (globalThis.process.env['VITE_GA_MEASUREMENT_ID'] && globalThis.process.env['VITE_GA_MEASUREMENT_ID'].length > 0)
+    ReactGA.initialize(globalThis.process.env['VITE_GA_MEASUREMENT_ID'])
 }
 
 export const logPageView = () => {
-  ReactGA.set({ page: window.location.pathname })
-  ReactGA.pageview(window.location.pathname)
+  ReactGA.send({ hitType: 'pageview', page: window.location.pathname })
 }

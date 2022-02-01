@@ -12,7 +12,7 @@ import { useFetch } from 'use-http'
 export default function usePaginatedSearch(
   path: string,
   queryParams: Record<string, any>,
-  options = {}
+  options = {} as { headers: { [key: string]: string } }
 ): { loading: boolean; error: unknown; entries: Array<unknown>; loadMore: () => void; hasMore: boolean } {
   const urlRef = useRef() as any
 
@@ -20,7 +20,7 @@ export default function usePaginatedSearch(
     urlRef.current = new URL(path, (window as any).location)
 
     for (const name in queryParams) {
-      if (Object.prototype.hasOwnProperty.call(queryParams, name)) {
+      if (typeof queryParams[name] !== 'undefined') {
         urlRef.current.searchParams.set(name, queryParams[name])
       }
     }
@@ -32,7 +32,7 @@ export default function usePaginatedSearch(
     urlRef.current = new URL(path, (window as any).location)
 
     for (const name in queryParams) {
-      if (Object.prototype.hasOwnProperty.call(queryParams, name)) {
+      if (typeof queryParams[name] !== 'undefined') {
         urlRef.current.searchParams.set(name, queryParams[name])
       }
     }
@@ -54,7 +54,6 @@ export default function usePaginatedSearch(
     {
       headers: {
         'content-type': 'application/json',
-        /* @ts-ignore */
         ...options.headers
       },
       onNewData: (data, newData) => {

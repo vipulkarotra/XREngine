@@ -1,8 +1,7 @@
-import React, { Component } from 'react'
-import PropTypes from 'prop-types'
+import React from 'react'
 import styled from 'styled-components'
-import { ThemeContext } from './theme'
-import { withTranslation } from 'react-i18next'
+import { useTranslation } from 'react-i18next'
+import { ThemeContext } from '@xrengine/client-core/src/util/theme'
 
 /**
  * StyledError styled component used to provide styles for error container.
@@ -29,24 +28,20 @@ const StyledError = (styled as any).div`
  * @author Robert Long
  * @type {component class}
  */
-export class Error extends Component<{ t: Function }> {
-  static propTypes = {
-    message: PropTypes.node,
-    t: PropTypes.func
-  }
-
-  static contextType = ThemeContext
+export const Error = (props: any) => {
+  const { t } = useTranslation()
 
   // rendering error message
-  render() {
-    const theme = this.context
-    return (
-      <StyledError theme={theme}>
-        <a href="/">{this.props.t('editor:lbl-return')}</a>
-        {(this.props as any).message}
-      </StyledError>
-    )
-  }
+  const theme = context
+
+  return (
+    <StyledError theme={theme}>
+      <a href="/">{t('editor:lbl-return')}</a>
+      {props.message}
+    </StyledError>
+  )
 }
 
-export default withTranslation()(Error)
+Error.contextType = ThemeContext
+
+export default Error

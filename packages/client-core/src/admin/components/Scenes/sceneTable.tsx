@@ -1,64 +1,53 @@
 import React from 'react'
-import Table from '@material-ui/core/Table'
-import TableBody from '@material-ui/core/TableBody'
-import TableCell from '@material-ui/core/TableCell'
-import TableContainer from '@material-ui/core/TableContainer'
-import TableHead from '@material-ui/core/TableHead'
-import TableRow from '@material-ui/core/TableRow'
-import Button from '@material-ui/core/Button'
-import Dialog from '@material-ui/core/Dialog'
-import DialogActions from '@material-ui/core/DialogActions'
-import DialogContent from '@material-ui/core/DialogContent'
-import DialogContentText from '@material-ui/core/DialogContentText'
-import DialogTitle from '@material-ui/core/DialogTitle'
-import { Dispatch, bindActionCreators } from 'redux'
-import { useStyles, useStyle } from './styles'
-import { columns, Data } from './variables'
-import TablePagination from '@material-ui/core/TablePagination'
-import { fetchAdminScenes, deleteScene } from '../../reducers/admin/scene/service'
-import { connect } from 'react-redux'
-import { selectAuthState } from '../../../user/reducers/auth/selector'
-import { selectAdminSceneState } from '../../reducers/admin/scene/selector'
+import Table from '@mui/material/Table'
+import TableBody from '@mui/material/TableBody'
+import TableCell from '@mui/material/TableCell'
+import TableContainer from '@mui/material/TableContainer'
+import TableHead from '@mui/material/TableHead'
+import TableRow from '@mui/material/TableRow'
+import Button from '@mui/material/Button'
+import Dialog from '@mui/material/Dialog'
+import DialogActions from '@mui/material/DialogActions'
+import DialogContent from '@mui/material/DialogContent'
+import DialogContentText from '@mui/material/DialogContentText'
+import DialogTitle from '@mui/material/DialogTitle'
+import { useSceneStyles, useSceneStyle } from './styles'
+import { sceneColumns, SceneData } from './variables'
+import TablePagination from '@mui/material/TablePagination'
+import { SceneService } from '../../services/SceneService'
+import { useAuthState } from '../../../user/services/AuthService'
+import { useSceneState } from '../../services/SceneService'
 import ViewScene from './ViewScene'
+import { SCENE_PAGE_LIMIT } from '../../services/SceneService'
+import { SceneDetailInterface } from '@xrengine/common/src/interfaces/SceneInterface'
 
-interface Props {
-  fetchSceneAdmin?: any
-  authState?: any
-  adminSceneState?: any
-  deleteScene?: any
-}
-
-const mapStateToProps = (state: any): any => ({
-  authState: selectAuthState(state),
-  adminSceneState: selectAdminSceneState(state)
-})
-
-const mapDispatchToProps = (dispatch: Dispatch): any => ({
-  fetchSceneAdmin: bindActionCreators(fetchAdminScenes, dispatch),
-  deleteScene: bindActionCreators(deleteScene, dispatch)
-})
+interface Props {}
 
 const SceneTable = (props: Props) => {
-  const { fetchSceneAdmin, deleteScene, authState, adminSceneState } = props
-  const classx = useStyles()
-  const classes = useStyle()
-  const user = authState.get('user')
-  const scene = adminSceneState?.get('scenes')
-  const sceneData = scene?.get('scenes')
-  const [singleScene, setSingleScene] = React.useState('')
+  const classx = useSceneStyles()
+  const classes = useSceneStyle()
+  const authState = useAuthState()
+  const user = authState.user
+
+  const scene = useSceneState()
+  const sceneData = scene?.scenes
+  const sceneCount = scene?.total
+  const [singleScene, setSingleScene] = React.useState<SceneDetailInterface>(null!)
   const [open, setOpen] = React.useState(false)
   const [showWarning, setShowWarning] = React.useState(false)
   const [sceneId, setSceneId] = React.useState('')
   const [page, setPage] = React.useState(0)
-  const [rowsPerPage, setRowsPerPage] = React.useState(12)
+  const [rowsPerPage, setRowsPerPage] = React.useState(SCENE_PAGE_LIMIT)
 
   React.useEffect(() => {
-    if (user.id && scene.get('updateNeeded')) {
-      fetchSceneAdmin()
+    if (user.id.value && scene.updateNeeded.value) {
+      SceneService.fetchAdminScenes()
     }
-  }, [user, scene])
+  }, [user, scene.updateNeeded.value])
 
   const handlePageChange = (event: unknown, newPage: number) => {
+    const incDec = page < newPage ? 'increment' : 'decrement'
+    SceneService.fetchAdminScenes(incDec)
     setPage(newPage)
   }
   const handleRowsPerPageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -71,9 +60,11 @@ const SceneTable = (props: Props) => {
   }
 
   const handleViewScene = (id: string) => {
-    const scene = sceneData.find((sc) => sc.id === id)
-    setSingleScene(scene)
-    setOpen(true)
+    const scene = sceneData?.value.find((sc) => sc.id === id)
+    if (scene !== undefined) {
+      setSingleScene(scene)
+      setOpen(true)
+    }
   }
 
   const handleShowWarning = (id: string) => {
@@ -87,10 +78,17 @@ const SceneTable = (props: Props) => {
 
   const deleteSceneHandler = () => {
     setShowWarning(false)
-    deleteScene(sceneId)
+    SceneService.deleteScene(sceneId)
   }
 
-  const createData = (id: string, name: string, type: string, description: string, entity: any, version: any): Data => {
+  const createData = (
+    id: string,
+    name: string | JSX.Element,
+    type: string | JSX.Element,
+    description: string | JSX.Element,
+    entity: any,
+    version: any
+  ): SceneData => {
     return {
       id,
       name,
@@ -114,9 +112,9 @@ const SceneTable = (props: Props) => {
     }
   }
 
-  const rows = sceneData.map((el) => {
+  const rows = sceneData?.value.map((el) => {
     return createData(
-      el.id,
+      el.id!,
       el.name || <span className={classes.spanNone}>None</span>,
       el.type || <span className={classes.spanNone}>None</span>,
       el.description || <span className={classes.spanNone}>None</span>,
@@ -125,15 +123,13 @@ const SceneTable = (props: Props) => {
     )
   })
 
-  const count = rows.size ? rows.size : rows.length
-
   return (
     <div className={classes.root}>
       <TableContainer className={classes.container}>
         <Table stickyHeader aria-label="sticky table">
           <TableHead>
             <TableRow>
-              {columns.map((column) => (
+              {sceneColumns.map((column) => (
                 <TableCell
                   key={column.id}
                   align={column.align}
@@ -146,10 +142,10 @@ const SceneTable = (props: Props) => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {rows.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((row, id) => {
+            {rows.map((row, id) => {
               return (
                 <TableRow hover role="checkbox" tabIndex={-1} key={row.id}>
-                  {columns.map((column) => {
+                  {sceneColumns.map((column) => {
                     const value = row[column.id]
                     return (
                       <TableCell key={column.id} align={column.align} className={classx.tableCellBody}>
@@ -164,9 +160,9 @@ const SceneTable = (props: Props) => {
         </Table>
       </TableContainer>
       <TablePagination
-        rowsPerPageOptions={[12]}
+        rowsPerPageOptions={[SCENE_PAGE_LIMIT]}
         component="div"
-        count={count || 12}
+        count={sceneCount?.value || 12}
         rowsPerPage={rowsPerPage}
         page={page}
         onPageChange={handlePageChange}
@@ -200,4 +196,4 @@ const SceneTable = (props: Props) => {
     </div>
   )
 }
-export default connect(mapStateToProps, mapDispatchToProps)(SceneTable)
+export default SceneTable

@@ -32,7 +32,7 @@ export class AcceptInvite implements ServiceMethods<Data> {
    * @returns {@Array} all listed invite
    * @author Vyacheslav Solovjov
    */
-  async find(params?: Params): Promise<Data[] | Paginated<Data>> {
+  async find(params: Params): Promise<Data[] | Paginated<Data>> {
     return []
   }
 
@@ -45,13 +45,13 @@ export class AcceptInvite implements ServiceMethods<Data> {
    * @author Vyacheslav Solovjov
    */
 
-  async get(id: Id, params?: Params): Promise<Data> {
-    if (params.query.t) {
-      params.query.passcode = params.query.t
-      delete params.query.t
+  async get(id: Id, params: Params): Promise<Data> {
+    if (params.query!.t) {
+      params.query!.passcode = params.query!.t
+      delete params.query!.t
     }
     try {
-      params.provider = null
+      params.provider = null!
       let invite
       try {
         invite = await this.app.service('invite').get(id, params)
@@ -64,7 +64,7 @@ export class AcceptInvite implements ServiceMethods<Data> {
         }
       }
 
-      if (params.query.passcode !== invite.passcode) {
+      if (params.query!.passcode !== invite.passcode) {
         console.log('INVALID INVITE PASSCODE')
         return {
           error: 'Invalid Invite Passcode'
@@ -94,38 +94,60 @@ export class AcceptInvite implements ServiceMethods<Data> {
         if (params['identity-provider'] == null) params['identity-provider'] = inviteeIdentityProvider
 
         if (invite.inviteType === 'friend') {
-          const existingRelationshipResult = await this.app.service('user-relationship').find({
+          const existingRelationshipResult = (await this.app.service('user-relationship').find({
             query: {
-              userRelationshipType: invite.inviteType,
+              $or: [
+                {
+                  userRelationshipType: 'requested'
+                },
+                {
+                  userRelationshipType: 'friend'
+                }
+              ],
               userId: invite.userId,
               relatedUserId: inviteeIdentityProvider.userId
             }
-          })
+          })) as any
 
           if ((existingRelationshipResult as any).total === 0) {
             await this.app.service('user-relationship').create(
               {
-                userRelationshipType: invite.inviteType,
+                userRelationshipType: 'friend',
                 userId: invite.userId,
                 relatedUserId: inviteeIdentityProvider.userId
               },
               params
             )
+          } else {
+            await this.app.service('user-relationship').patch(
+              existingRelationshipResult.data[0].id,
+              {
+                userRelationshipType: 'friend'
+              },
+              params
+            )
           }
 
-          const relationshipToPatch = await this.app.service('user-relationship').find({
+          const relationshipToPatch = (await this.app.service('user-relationship').find({
             query: {
-              userRelationshipType: 'requested',
+              $or: [
+                {
+                  userRelationshipType: 'requested'
+                },
+                {
+                  userRelationshipType: 'friend'
+                }
+              ],
               userId: inviteeIdentityProvider.userId,
               relatedUserId: invite.userId
             }
-          })
+          })) as any
 
           if (relationshipToPatch.data.length > 0)
             await this.app.service('user-relationship').patch(
               relationshipToPatch.data[0].id,
               {
-                userRelationshipType: invite.inviteType
+                userRelationshipType: 'friend'
               },
               params
             )
@@ -138,13 +160,13 @@ export class AcceptInvite implements ServiceMethods<Data> {
 
           const { query, ...paramsCopy } = params
 
-          const existingGroupUser = await this.app.service('group-user').find({
+          const existingGroupUser = (await this.app.service('group-user').find({
             query: {
               userId: inviteeIdentityProvider.userId,
               groupId: invite.targetObjectId,
               groupUserRank: 'user'
             }
-          })
+          })) as any
 
           if (existingGroupUser.total === 0) {
             paramsCopy.skipAuth = true
@@ -169,13 +191,13 @@ export class AcceptInvite implements ServiceMethods<Data> {
 
           const { query, ...paramsCopy } = params
 
-          const existingPartyUser = await this.app.service('party-user').find({
+          const existingPartyUser = (await this.app.service('party-user').find({
             query: {
               userId: inviteeIdentityProvider.userId,
               partyId: invite.targetObjectId,
               isOwner: false
             }
-          })
+          })) as any
 
           if (existingPartyUser.total === 0) {
             paramsCopy.skipAuth = true
@@ -199,38 +221,60 @@ export class AcceptInvite implements ServiceMethods<Data> {
         if (params['identity-provider'] == null) params['identity-provider'] = invitee.identityProvider
 
         if (invite.inviteType === 'friend') {
-          const existingRelationshipResult = await this.app.service('user-relationship').find({
+          const existingRelationshipResult = (await this.app.service('user-relationship').find({
             query: {
-              userRelationshipType: invite.inviteType,
+              $or: [
+                {
+                  userRelationshipType: 'requested'
+                },
+                {
+                  userRelationshipType: 'friend'
+                }
+              ],
               userId: invite.userId,
               relatedUserId: invite.inviteeId
             }
-          })
+          })) as any
 
           if ((existingRelationshipResult as any).total === 0) {
             await this.app.service('user-relationship').create(
               {
-                userRelationshipType: invite.inviteType,
+                userRelationshipType: 'friend',
                 userId: invite.userId,
                 relatedUserId: invite.inviteeId
               },
               params
             )
+          } else {
+            await this.app.service('user-relationship').patch(
+              existingRelationshipResult.data[0].id,
+              {
+                userRelationshipType: 'friend'
+              },
+              params
+            )
           }
 
-          const relationshipToPatch = await this.app.service('user-relationship').find({
+          const relationshipToPatch = (await this.app.service('user-relationship').find({
             query: {
-              userRelationshipType: 'requested',
+              $or: [
+                {
+                  userRelationshipType: 'requested'
+                },
+                {
+                  userRelationshipType: 'friend'
+                }
+              ],
               userId: invite.inviteeId,
               relatedUserId: invite.userId
             }
-          })
+          })) as any
 
           if (relationshipToPatch.data.length > 0)
             await this.app.service('user-relationship').patch(
               relationshipToPatch.data[0].id,
               {
-                userRelationshipType: invite.inviteType
+                userRelationshipType: 'friend'
               },
               params
             )
@@ -243,12 +287,13 @@ export class AcceptInvite implements ServiceMethods<Data> {
 
           const { query, ...paramsCopy } = params
 
-          const existingGroupUser = await this.app.service('group-user').find({
+          const existingGroupUser = (await this.app.service('group-user').find({
             query: {
               userId: invite.inviteeId,
               groupId: invite.targetObjectId
             }
-          })
+          })) as any
+
           if (existingGroupUser.total === 0) {
             paramsCopy.skipAuth = true
             await this.app.service('group-user').create(
@@ -273,13 +318,13 @@ export class AcceptInvite implements ServiceMethods<Data> {
 
           const { query, ...paramsCopy } = params
 
-          const existingPartyUser = await this.app.service('party-user').find({
+          const existingPartyUser = (await this.app.service('party-user').find({
             query: {
               userId: invite.inviteeId,
               partyId: invite.targetObjectId,
               isOwner: false
             }
-          })
+          })) as any
 
           if (existingPartyUser.total === 0) {
             paramsCopy.skipAuth = true
@@ -295,6 +340,7 @@ export class AcceptInvite implements ServiceMethods<Data> {
         }
       }
 
+      params.preventUserRelationshipRemoval = true
       await this.app.service('invite').remove(invite.id, params)
       const token = await (this.app.service('authentication') as any).createAccessToken(
         {},
@@ -305,6 +351,7 @@ export class AcceptInvite implements ServiceMethods<Data> {
       }
     } catch (err) {
       logger.error(err)
+      return null!
     }
   }
 
@@ -315,7 +362,7 @@ export class AcceptInvite implements ServiceMethods<Data> {
    * @param params
    * @author Vyacheslav Solovjov
    */
-  async create(data: Data, params?: Params): Promise<Data> {
+  async create(data: Data, params: Params): Promise<Data> {
     if (Array.isArray(data)) {
       return await Promise.all(data.map((current) => this.create(current, params)))
     }
@@ -332,7 +379,7 @@ export class AcceptInvite implements ServiceMethods<Data> {
    * @returns Data
    * @author Vyacheslav Solovjov
    */
-  async update(id: NullableId, data: Data, params?: Params): Promise<Data> {
+  async update(id: NullableId, data: Data, params: Params): Promise<Data> {
     return data
   }
 
@@ -345,7 +392,7 @@ export class AcceptInvite implements ServiceMethods<Data> {
    * @returns Data
    * @author Vyacheslav Solovjov
    */
-  async patch(id: NullableId, data: Data, params?: Params): Promise<Data> {
+  async patch(id: NullableId, data: Data, params: Params): Promise<Data> {
     return data
   }
 
@@ -356,7 +403,7 @@ export class AcceptInvite implements ServiceMethods<Data> {
    * @returns id
    * @author Vyacheslav Solovjov
    */
-  async remove(id: NullableId, params?: Params): Promise<Data> {
+  async remove(id: NullableId, params: Params): Promise<Data> {
     return { id }
   }
 }

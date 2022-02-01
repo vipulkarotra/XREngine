@@ -1,30 +1,49 @@
-import React, { useCallback, useRef, useEffect, useContext, memo } from 'react'
+import React, { useCallback, useRef, useEffect, memo, useContext } from 'react'
 import PropTypes from 'prop-types'
-import InfiniteScroll from 'react-infinite-scroller'
-import styled from 'styled-components'
 import { VerticalScrollContainer } from '../layout/Flex'
 import { MediaGrid, ImageMediaGridItem, VideoMediaGridItem, IconMediaGridItem } from '../layout/MediaGrid'
-import { unique } from '@xrengine/editor/src/functions/utils'
+import { unique } from '../../functions/utils'
 import { ContextMenuTrigger, ContextMenu, MenuItem } from '../layout/ContextMenu'
 import { useDrag } from 'react-dnd'
 import { getEmptyImage } from 'react-dnd-html5-backend'
 import AssetTooltip from './AssetTooltip'
-import { EditorContext } from '../contexts/EditorContext'
-import { ItemTypes } from '../dnd'
-import AudioPreview from './AudioPreview'
-import Tooltip, { TooltipContainer } from '../layout/Tooltip'
+import Tooltip from '@mui/material/Tooltip'
 import { useTranslation } from 'react-i18next'
+import { CommandManager } from '../../managers/CommandManager'
+import EditorCommands from '../../constants/EditorCommands'
+import { SceneManager } from '../../managers/SceneManager'
+import { prefabIcons } from '../../functions/PrefabEditors'
+import { ItemTypes } from '../../constants/AssetTypes'
+import { useWorld } from '@xrengine/engine/src/ecs/functions/SystemHooks'
+import { EntityTreeNode } from '@xrengine/engine/src/ecs/classes/EntityTree'
+import { createEntity } from '@xrengine/engine/src/ecs/functions/EntityFunctions'
+import { shouldPrefabDeserialize } from '../../functions/shouldDeserialiez'
+import { ScenePrefabTypes } from '@xrengine/engine/src/scene/functions/registerPrefabs'
+import { getComponent } from '@xrengine/engine/src/ecs/functions/ComponentFunctions'
+import { TransformComponent } from '@xrengine/engine/src/transform/components/TransformComponent'
+import { FileDataType } from './FileDataType'
+import { AppContext } from '../Search/context'
 
-/**
- * AssetGridTooltipContainer used to provide styles for tooltip shown if we hover the object.
- *
- * @author Robert Long
- * @type {styled component}
- */
-const AssetGridTooltipContainer = (styled as any)(TooltipContainer)`
-  max-width: initial;
-  text-align: left;
-`
+const getPrefabs = () => {
+  const arr = [] as FileDataType[]
+
+  useWorld().scenePrefabRegistry.forEach((_, prefabType: ScenePrefabTypes) => {
+    if (shouldPrefabDeserialize(prefabType)) {
+      arr.push({
+        id: prefabType,
+        iconComponent: prefabIcons[prefabType] || null,
+        label: prefabType, // todo
+        description: '', // todo
+        type: ItemTypes.Element,
+        nodeClass: prefabType,
+        initialProps: null,
+        url: ''
+      })
+    }
+  })
+
+  return arr
+}
 
 /**
  * collectMenuProps returns menu items.
@@ -74,13 +93,7 @@ function AssetGridItem({ contextMenuId, tooltipComponent, disableTooltip, item, 
     )
   } else {
     //setting content as ImageMediaGridItem if all above cases are false
-    // @ts-ignore
     content = <ImageMediaGridItem onClick={onClickItem} label={item.label} {...rest} />
-  }
-
-  if (item.type === ItemTypes.Audio) {
-    //setting content as AudioPreview component if item type is audio
-    content = <AudioPreview src={item.url}>{content}</AudioPreview>
   }
 
   const [_dragProps, drag, preview] = useDrag(() => ({
@@ -89,51 +102,24 @@ function AssetGridItem({ contextMenuId, tooltipComponent, disableTooltip, item, 
     multiple: false
   }))
 
-  /**
-   * [renderTooltip  used to render tooltip for AssetGrid]
-   * @type {function component}
-   */
-  const renderTooltip = useCallback(() => {
-    const TooltipComponent = tooltipComponent
-    return (
-      <AssetGridTooltipContainer>
-        <TooltipComponent item={item} />
-      </AssetGridTooltipContainer>
-    )
-  }, [item, tooltipComponent])
-
   //showing the object in viewport once it drag and droped
   useEffect(() => {
     preview(getEmptyImage(), { captureDraggingState: true })
   }, [preview])
 
+  const TooltipComponent = tooltipComponent
+
   //creating view for AssetGrid using ContextMenuTrigger and tooltip component
   return (
     <div ref={drag}>
-      {/* @ts-ignore */}
-      <ContextMenuTrigger id={contextMenuId} item={item} collect={collectMenuProps} holdToDisplay={-1}>
-        {/* @ts-ignore */}
-        <Tooltip renderContent={renderTooltip} disabled={disableTooltip}>
-          {content}
+      <ContextMenuTrigger id={contextMenuId} collect={collectMenuProps} holdToDisplay={-1}>
+        <Tooltip title={<TooltipComponent item={item} />}>
+          <div>{content}</div>
         </Tooltip>
       </ContextMenuTrigger>
     </div>
   )
 }
-
-// styled component fpr showing loading in AssetGrid container
-const LoadingItem = (styled as any).div`
-  display: flex;
-  flex-direction: column;
-  height: 100px;
-  border-radius: 6px;
-  background-color: rgba(128, 128, 128, 0.5);
-  border: 2px solid transparent;
-  overflow: hidden;
-  justify-content: center;
-  align-items: center;
-  user-select: none;
-`
 
 //declaring propTypes for AssetGridItem
 AssetGridItem.propTypes = {
@@ -150,6 +136,13 @@ AssetGridItem.propTypes = {
     iconComponent: PropTypes.object,
     url: PropTypes.string
   }).isRequired
+}
+
+AssetGrid.defaultProps = {
+  onSelect: () => {},
+  items: [],
+  selectedItems: [],
+  tooltip: AssetTooltip
 }
 
 //variable used to create uniqueId
@@ -181,121 +174,67 @@ const MemoAssetGridItem = memo(AssetGridItem)
  * @param       {any}  source
  * @constructor
  */
-export function AssetGrid({ isLoading, selectedItems, items, onSelect, onLoadMore, hasMore, tooltip, source }) {
-  const editor = useContext(EditorContext)
+export function AssetGrid({ onSelect, tooltip }) {
   const uniqueId = useRef(`AssetGrid${lastId}`)
   const { t } = useTranslation()
+  const { searchElement } = useContext(AppContext)
+
+  const items = getPrefabs()
+  const res = [] as FileDataType[]
+  if (searchElement.length > 0) {
+    const condition = new RegExp(searchElement.toLowerCase())
+    items.forEach((el) => {
+      if (condition.test(el.label.toLowerCase())) res.push(el)
+    })
+  }
+
+  const renderedItems = res?.length > 0 ? res : items
 
   // incrementig lastId
   useEffect(() => {
     lastId++
   }, [])
 
-  // creating callback function used if object get placed on viewport
-  const placeObject = useCallback(
-    (_, trigger) => {
-      const item = trigger.item
+  const placeObject = useCallback((_, trigger) => {
+    const node = new EntityTreeNode(createEntity())
+    CommandManager.instance.executeCommandWithHistory(EditorCommands.ADD_OBJECTS, node, {
+      prefabTypes: trigger.item.nodeClass
+    })
 
-      const node = new item.nodeClass(editor)
-
-      if (item.initialProps) {
-        Object.assign(node, item.initialProps)
-      }
-
-      editor.getSpawnPosition(node.position)
-
-      editor.addObject(node)
-    },
-    [editor]
-  )
-  //creating callback function used when we choose placeObjectAtOrigin option from context menu of AssetGridItem
-  const placeObjectAtOrigin = useCallback(
-    (_, trigger) => {
-      const item = trigger.item
-
-      const node = new item.nodeClass(editor)
-
-      if (item.initialProps) {
-        Object.assign(node, item.initialProps)
-      }
-
-      editor.addObject(node)
-    },
-    [editor]
-  )
-
-  const copyURL = useCallback((_, trigger) => {
-    // if (navigator.clipboard) {
-    //   navigator.clipboard.writeText(trigger.item.url);
-    // }
+    const transformComponent = getComponent(node.entity, TransformComponent)
+    if (transformComponent) SceneManager.instance.getSpawnPosition(transformComponent.position)
   }, [])
 
-  const openURL = useCallback((_, trigger) => {
-    window.open(trigger.item.url)
+  const placeObjectAtOrigin = useCallback((_, trigger) => {
+    const node = new EntityTreeNode(createEntity())
+    CommandManager.instance.executeCommandWithHistory(EditorCommands.ADD_OBJECTS, node, {
+      prefabTypes: trigger.item.nodeClass
+    })
   }, [])
 
-  const onDelete = useCallback(
-    (_, trigger) => {
-      source.delete(trigger.item)
-    },
-    [source]
-  )
-
-  //returning view of AssetGridItems
   return (
     <>
       <VerticalScrollContainer flex>
-        <InfiniteScroll pageStart={0} loadMore={onLoadMore} hasMore={hasMore} threshold={100} useWindow={false}>
-          <MediaGrid>
-            {unique(items, 'id').map((item) => (
-              <MemoAssetGridItem
-                key={item.id}
-                tooltipComponent={tooltip}
-                disableTooltip={false}
-                contextMenuId={uniqueId.current}
-                item={item}
-                selected={selectedItems.indexOf(item) !== -1}
-                onClick={onSelect}
-              />
-            ))}
-            {isLoading && <LoadingItem>{t('editor:layout.assetGrid.loading')}</LoadingItem>}
-          </MediaGrid>
-        </InfiniteScroll>
+        <MediaGrid>
+          {unique<any>(renderedItems, (item) => item.id).map((item: any) => (
+            <MemoAssetGridItem
+              key={item.id}
+              tooltipComponent={tooltip}
+              disableTooltip={false}
+              contextMenuId={uniqueId.current}
+              item={item}
+              // selected={selectedItems.indexOf(item) !== -1}
+              onClick={onSelect}
+            />
+          ))}
+        </MediaGrid>
       </VerticalScrollContainer>
-      {/* @ts-ignore */}
       <ContextMenu id={uniqueId.current}>
         <MenuItem onClick={placeObject}>{t('editor:layout.assetGrid.placeObject')}</MenuItem>
         <MenuItem onClick={placeObjectAtOrigin}>{t('editor:layout.assetGrid.placeObjectAtOrigin')}</MenuItem>
-        {!source.disableUrl && <MenuItem onClick={copyURL}>{t('editor:layout.assetGrid.copyURL')}</MenuItem>}
-        {!source.disableUrl && <MenuItem onClick={openURL}>{t('editor:layout.assetGrid.openInNewTab')}</MenuItem>}
-        {source.delete && <MenuItem onClick={onDelete}>{t('editor:layout.assetGrid.deleteAsset')}</MenuItem>}
       </ContextMenu>
     </>
   )
-}
-
-//creating propTypes for asset grid
-AssetGrid.propTypes = {
-  source: PropTypes.object,
-  tooltip: PropTypes.func,
-  isLoading: PropTypes.bool,
-  onSelect: PropTypes.func,
-  onLoadMore: PropTypes.func.isRequired,
-  hasMore: PropTypes.bool,
-  selectedItems: PropTypes.arrayOf(
-    PropTypes.shape({
-      id: PropTypes.any.isRequired,
-      label: PropTypes.string,
-      thumbnailUrl: PropTypes.string
-    })
-  ).isRequired,
-  items: PropTypes.arrayOf(
-    PropTypes.shape({
-      id: PropTypes.any.isRequired,
-      label: PropTypes.string,
-      thumbnailUrl: PropTypes.string
-    })
-  ).isRequired
 }
 
 // creating default properties for AssetGrid

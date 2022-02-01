@@ -3,10 +3,9 @@ import { localAudioConstraints, localVideoConstraints } from '../constants/Video
 import { Network } from '../classes/Network'
 import { isClient } from '../../common/functions/isClient'
 import { getNearbyUsers, NearbyUser } from '../functions/getNearbyUsers'
-import { startLivestreamOnServer } from '../functions/startLivestreamOnServer'
-import { ECSWorld } from '../../ecs/classes/World'
-import { defineSystem, System } from 'bitecs'
-import { CreateSystemFunctionType } from '../../ecs/functions/SystemFunctions'
+import { World } from '../../ecs/classes/World'
+import { Engine } from '../../ecs/classes/Engine'
+import { ChannelType } from '@xrengine/common/src/interfaces/Channel'
 
 /** System class for media streaming. */
 export class MediaStreams {
@@ -24,26 +23,26 @@ export class MediaStreams {
   /** Whether the face tracking is enabled or not. */
   public faceTracking = false
   /** Video stream for streaming data. */
-  public videoStream: MediaStream = null
+  public videoStream: MediaStream = null!
   /** Video stream for streaming data. */
-  public audioStream: MediaStream = null
+  public audioStream: MediaStream = null!
   /** Audio Gain to be applied on media stream. */
-  public audioGainNode: GainNode = null
+  public audioGainNode: GainNode = null!
 
   /** Local screen container. */
-  public localScreen = null
+  public localScreen = null as any
   /** Producer using camera to get Video. */
-  public camVideoProducer = null
+  public camVideoProducer = null as any
   /** Producer using camera to get Audio. */
-  public camAudioProducer = null
+  public camAudioProducer = null as any
   /** Producer using screen to get Video. */
-  public screenVideoProducer = null
+  public screenVideoProducer = null as any
   /** Producer using screen to get Audio. */
-  public screenAudioProducer = null
+  public screenAudioProducer = null as any
   /** List of all producers nodes.. */
-  public producers = []
+  public producers = [] as any[]
   /** List of all consumer nodes. */
-  public consumers = []
+  public consumers = [] as any[]
   /** Indication of whether the video while screen sharing is paused or not. */
   public screenShareVideoPaused = false
   /** Indication of whether the audio while screen sharing is paused or not. */
@@ -51,9 +50,9 @@ export class MediaStreams {
   /** Whether the component is initialized or not. */
   public initialized = false
   /** Current channel type */
-  public channelType = null
+  public channelType: ChannelType = null!
   /** Current channel ID */
-  public channelId = null
+  public channelId: string = null!
 
   public nearbyLayerUsers = [] as NearbyUser[]
 
@@ -227,7 +226,7 @@ export class MediaStreams {
   }
 
   /** Get device ID of device which is currently streaming media. */
-  async getCurrentDeviceId(streamType: string): Promise<string | null> {
+  async getCurrentDeviceId(streamType: string) {
     if (streamType === 'video') {
       if (!this.camVideoProducer) return null
 
@@ -237,7 +236,7 @@ export class MediaStreams {
       const track = this.videoStream && this.videoStream.getVideoTracks()[0]
       if (!track) return null
       const devices = await navigator.mediaDevices.enumerateDevices()
-      const deviceInfo = devices.find((d) => d.label.startsWith(track.label))
+      const deviceInfo = devices.find((d) => d.label.startsWith(track.label))!
       return deviceInfo.deviceId
     }
     if (streamType === 'audio') {
@@ -249,7 +248,7 @@ export class MediaStreams {
       const track = this.audioStream && this.audioStream.getAudioTracks()[0]
       if (!track) return null
       const devices = await navigator.mediaDevices.enumerateDevices()
-      const deviceInfo = devices.find((d) => d.label.startsWith(track.label))
+      const deviceInfo = devices.find((d) => d.label.startsWith(track.label))!
       return deviceInfo.deviceId
     }
   }
@@ -274,6 +273,7 @@ export class MediaStreams {
       console.log('failed to get video stream')
       console.log(err)
     }
+    return false
   }
 
   /**
@@ -296,16 +296,30 @@ export class MediaStreams {
       console.log('failed to get audio stream')
       console.log(err)
     }
+    return false
   }
 }
 
-export const MediaStreamSystem = async (): Promise<System> => {
+export const updateNearbyAvatars = () => {
+  MediaStreams.instance.nearbyLayerUsers = getNearbyUsers(Engine.userId)
+  if (!MediaStreams.instance.nearbyLayerUsers.length) return
+  const nearbyUserIds = MediaStreams.instance.nearbyLayerUsers.map((user) => user.id)
+  EngineEvents.instance.dispatchEvent({ type: MediaStreams.EVENTS.UPDATE_NEARBY_LAYER_USERS })
+  MediaStreams.instance.consumers.forEach((consumer) => {
+    if (!nearbyUserIds.includes(consumer._appData.peerId)) {
+      EngineEvents.instance.dispatchEvent({ type: MediaStreams.EVENTS.CLOSE_CONSUMER, consumer })
+    }
+  })
+}
+
+// every 5 seconds
+const NEARYBY_AVATAR_UPDATE_PERIOD = 60 * 5
+
+export default async function MediaStreamSystem(world: World) {
   let nearbyAvatarTick = 0
   let executeInProgress = false
 
-  return defineSystem((world: ECSWorld) => {
-    nearbyAvatarTick++
-
+  return () => {
     if (Network.instance.mediasoupOperationQueue.getBufferLength() > 0 && executeInProgress === false) {
       executeInProgress = true
       const buffer = Network.instance.mediasoupOperationQueue.pop() as any
@@ -325,20 +339,12 @@ export const MediaStreamSystem = async (): Promise<System> => {
       }
     }
 
-    if (nearbyAvatarTick > 500) {
-      nearbyAvatarTick = 0
-      if (isClient) {
-        MediaStreams.instance.nearbyLayerUsers = getNearbyUsers(Network.instance.userId)
-        const nearbyUserIds = MediaStreams.instance.nearbyLayerUsers.map((user) => user.id)
-        EngineEvents.instance.dispatchEvent({ type: MediaStreams.EVENTS.UPDATE_NEARBY_LAYER_USERS })
-        MediaStreams.instance.consumers.forEach((consumer) => {
-          if (!nearbyUserIds.includes(consumer._appData.peerId)) {
-            EngineEvents.instance.dispatchEvent({ type: MediaStreams.EVENTS.CLOSE_CONSUMER, consumer })
-          }
-        })
+    if (isClient) {
+      nearbyAvatarTick++
+      if (nearbyAvatarTick > NEARYBY_AVATAR_UPDATE_PERIOD) {
+        nearbyAvatarTick = 0
+        updateNearbyAvatars()
       }
     }
-
-    return world
-  })
+  }
 }

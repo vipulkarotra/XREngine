@@ -17,28 +17,39 @@ export function insertSeparator(children, separatorFn) {
 export function objectToMap(object: object) {
   return new Map(Object.entries(object))
 }
-export function unique(arr, maybeComp) {
-  const set = new Set()
-  const newArr = []
-  let comp = maybeComp
-  if (typeof comp === 'undefined') {
-    comp = (item) => item
-  } else if (typeof comp === 'string') {
-    comp = (item) => item[maybeComp]
-  }
+
+export const unique = <T, S = T>(arr: T[], keyFinder: (item: T) => S): T[] => {
+  const set = new Set<S>()
+  const newArr = [] as T[]
+  if (!keyFinder) keyFinder = (item: T) => item as any as S
+
   for (const item of arr) {
-    const key = comp(item)
+    const key = keyFinder(item)
     if (set.has(key)) continue
+
     newArr.push(item)
     set.add(key)
   }
+
   return newArr
 }
-export const isApple = /(Mac|iPhone|iPod|iPad)/i.test(
-  //@ts-ignore
-  process.browser && navigator ? navigator.platform : ''
-)
-export const cmdOrCtrlString = isApple ? '⌘' : 'ctrl'
+
+export const isApple = () => {
+  const iOS_1to12 = /iPad|iPhone|iPod/.test(navigator.platform)
+
+  const iOS13_iPad = navigator.platform === 'MacIntel'
+
+  const iOS1to12quirk = () => {
+    var audio = new Audio() // temporary Audio object
+    audio.volume = 0.5 // has no effect on iOS <= 12
+    return audio.volume === 1
+  }
+
+  return iOS_1to12 || iOS13_iPad || iOS1to12quirk()
+}
+
+export const cmdOrCtrlString = isApple() ? '⌘' : 'ctrl'
+
 export function getStepSize(event, smallStep, mediumStep, largeStep) {
   if (event.altKey) {
     return smallStep

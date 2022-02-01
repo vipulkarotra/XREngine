@@ -1,3 +1,4 @@
+import { Location as LocationType } from '@xrengine/common/src/interfaces/Location'
 import { Service, SequelizeServiceOptions } from 'feathers-sequelize'
 import { Application } from '../../../declarations'
 import { Params } from '@feathersjs/feathers'
@@ -119,13 +120,12 @@ export class Location extends Service {
    * @author Vyacheslav Solovjov
    */
   async find(params: Params): Promise<any> {
-    // eslint-disable-next-line prefer-const
-    let { $skip, $limit, $sort, joinableLocations, adminnedLocations, search, ...strippedQuery } = params.query
+    let { $skip, $limit, $sort, joinableLocations, adminnedLocations, search, ...strippedQuery } = params.query!
 
     if ($skip == null) $skip = 0
     if ($limit == null) $limit = 10
 
-    const order = []
+    const order: any[] = []
     if ($sort != null)
       Object.keys($sort).forEach((name, val) => {
         order.push([name, $sort[name] === -1 ? 'DESC' : 'ASC'])
@@ -144,7 +144,8 @@ export class Location extends Service {
             where: {
               currentUsers: {
                 [Op.lt]: Sequelize.col('location.maxUsersPerInstance')
-              }
+              },
+              ended: false
             }
           },
           {
@@ -165,7 +166,6 @@ export class Location extends Service {
       }
     } else if (adminnedLocations) {
       const loggedInUser = extractLoggedInUserFromParams(params)
-      const selfUser = await this.app.service('user').get(loggedInUser.userId)
       const include = [
         {
           model: (this.app.service('location-settings') as any).Model,
@@ -177,11 +177,11 @@ export class Location extends Service {
         }
       ]
 
-      if (selfUser.userRole !== 'admin') {
+      if (loggedInUser.userRole !== 'admin') {
         ;(include as any).push({
           model: (this.app.service('location-admin') as any).Model,
           where: {
-            userId: loggedInUser.userId
+            userId: loggedInUser.id
           }
         })
       }
@@ -200,7 +200,6 @@ export class Location extends Service {
           ]
         }
       }
-
       const locationResult = await (this.app.service('location') as any).Model.findAndCountAll({
         offset: $skip,
         limit: $limit,
@@ -227,28 +226,27 @@ export class Location extends Service {
    * @returns new location object
    * @author Vyacheslav Solovjov
    */
-  async create(data: any, params: Params): Promise<any> {
+  async create(data: LocationType, params: Params): Promise<any> {
     const t = await this.app.get('sequelizeClient').transaction()
 
     try {
-      // eslint-disable-next-line prefer-const
-      let { location_setting, ...locationData } = data
+      // @ts-ignore
+      let { location_settings, ...locationData } = data
       const loggedInUser = extractLoggedInUserFromParams(params)
       locationData.slugifiedName = slugify(locationData.name, { lower: true })
 
       if (locationData.isLobby) await this.makeLobby(params, t)
 
       const location = await this.Model.create(locationData, { transaction: t })
-
       await (this.app.service('location-settings') as any).Model.create(
         {
-          videoEnabled: !!location_setting.videoEnabled,
-          audioEnabled: !!location_setting.audioEnabled,
-          faceStreamingEnabled: !!location_setting.faceStreamingEnabled,
-          screenSharingEnabled: !!location_setting.screenSharingEnabled,
-          instanceMediaChatEnabled: !!location_setting.instanceMediaChatEnabled,
-          maxUsersPerInstance: location_setting.maxUsersPerInstance || 10,
-          locationType: location_setting.locationType || 'private',
+          videoEnabled: !!location_settings.videoEnabled,
+          audioEnabled: !!location_settings.audioEnabled,
+          faceStreamingEnabled: !!location_settings.faceStreamingEnabled,
+          screenSharingEnabled: !!location_settings.screenSharingEnabled,
+          instanceMediaChatEnabled: !!location_settings.instanceMediaChatEnabled,
+          maxUsersPerInstance: locationData.maxUsersPerInstance || 10,
+          locationType: location_settings.locationType || 'private',
           locationId: location.id
         },
         { transaction: t }
@@ -258,7 +256,7 @@ export class Location extends Service {
         await (this.app.service('location-admin') as any).Model.create(
           {
             locationId: location.id,
-            userId: loggedInUser.userId
+            userId: loggedInUser.id
           },
           { transaction: t }
         )
@@ -285,17 +283,19 @@ export class Location extends Service {
    * @returns updated location
    * @author Vyacheslav Solovjov
    */
-  async patch(id: string, data: any, params: Params): Promise<any> {
+  async patch(id: string, data: LocationType, params: Params): Promise<any> {
     const t = await this.app.get('sequelizeClient').transaction()
 
     try {
-      // eslint-disable-next-line prefer-const
-      let { location_setting, ...locationData } = data
+      // @ts-ignore
+      let { location_settings, ...locationData } = data
+      location_settings ??= data['location_setting']
 
       const old = await this.Model.findOne({
         where: { id },
         include: [(this.app.service('location-settings') as any).Model]
       })
+      const oldSettings = old.location_setting ?? old.location_settings
 
       if (locationData.name) locationData.slugifiedName = slugify(locationData.name, { lower: true })
       if (!old.isLobby && locationData.isLobby) await this.makeLobby(params, t)
@@ -304,15 +304,15 @@ export class Location extends Service {
 
       await (this.app.service('location-settings') as any).Model.update(
         {
-          videoEnabled: !!location_setting.videoEnabled,
-          audioEnabled: !!location_setting.audioEnabled,
-          faceStreamingEnabled: !!location_setting.faceStreamingEnabled,
-          screenSharingEnabled: !!location_setting.screenSharingEnabled,
-          instanceMediaChatEnabled: !!location_setting.instanceMediaChatEnabled,
-          maxUsersPerInstance: location_setting.maxUsersPerInstance || 10,
-          locationType: location_setting.locationType || 'private'
+          videoEnabled: !!location_settings.videoEnabled,
+          audioEnabled: !!location_settings.audioEnabled,
+          faceStreamingEnabled: !!location_settings.faceStreamingEnabled,
+          screenSharingEnabled: !!location_settings.screenSharingEnabled,
+          instanceMediaChatEnabled: !!location_settings.instanceMediaChatEnabled,
+          maxUsersPerInstance: locationData.maxUsersPerInstance || 10,
+          locationType: location_settings.locationType || 'private'
         },
-        { where: { id: old.location_setting.id }, transaction: t }
+        { where: { id: oldSettings.id }, transaction: t }
       )
 
       await t.commit()
@@ -342,7 +342,7 @@ export class Location extends Service {
 
   async remove(id: string, params: Params): Promise<any> {
     if (id != null) {
-      const loggedInUser = extractLoggedInUserFromParams(params)
+      const selfUser = extractLoggedInUserFromParams(params)
       const location = await this.app.service('location').get(id)
       if (location.locationSettingsId != null)
         await this.app.service('location-settings').remove(location.locationSettingsId)
@@ -350,7 +350,7 @@ export class Location extends Service {
         await this.app.service('location-admin').remove(null, {
           query: {
             locationId: id,
-            userId: loggedInUser.userId
+            userId: selfUser.id
           }
         })
       } catch (err) {
@@ -361,8 +361,7 @@ export class Location extends Service {
   }
 
   async makeLobby(params: Params, t): Promise<void> {
-    const loggedInUser = extractLoggedInUserFromParams(params)
-    const selfUser = await this.app.service('user').get(loggedInUser.userId)
+    const selfUser = extractLoggedInUserFromParams(params)
 
     if (!selfUser || selfUser.userRole !== 'admin') throw new Error('Only Admin can set Lobby')
 

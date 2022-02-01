@@ -1,21 +1,21 @@
 import * as Comlink from 'comlink'
-import { EngineEvents } from '../../ecs/classes/EngineEvents'
-import { getComponent } from '../../ecs/functions/EntityFunctions'
-import { Network } from '../../networking/classes/Network'
+import { Engine } from '../../ecs/classes/Engine'
 import { MediaStreams } from '../../networking/systems/MediaStreamSystem'
-import { InputComponent } from '../components/InputComponent'
 import { CameraInput } from '../enums/InputEnums'
 import { InputType } from '../enums/InputType'
-
+import { WebCamInputComponent } from '../components/WebCamInputComponent'
+import { hasComponent, getComponent } from '../../ecs/functions/ComponentFunctions'
+import { LifecycleValue } from '../../common/enums/LifecycleValue'
+import { useWorld } from '../../ecs/functions/SystemHooks'
 const EXPRESSION_THRESHOLD = 0.1
 
-const faceTrackingTimers = []
+const faceTrackingTimers: any[] = []
 let lipsyncTracking = false
-let audioContext = null
+let audioContext: AudioContext = null!
 
-let faceWorker: Comlink.Remote<any> = null
-let faceVideo: HTMLVideoElement = null
-let faceCanvas: OffscreenCanvas = null
+let faceWorker: Comlink.Remote<any> = null!
+let faceVideo: HTMLVideoElement = null!
+let faceCanvas: OffscreenCanvas = null!
 
 export const stopFaceTracking = () => {
   faceTrackingTimers.forEach((timer) => {
@@ -26,12 +26,14 @@ export const stopFaceTracking = () => {
 export const stopLipsyncTracking = () => {
   lipsyncTracking = false
   audioContext?.close()
-  audioContext = null
+  audioContext = null!
 }
 
 export const startFaceTracking = async () => {
   if (!faceWorker) {
-    faceWorker = Comlink.wrap(new Worker('/worker.js'))
+    //@ts-ignore
+    const worker = new Worker(new URL('./WebcamInputWorker.js', import.meta.url), { type: 'module' })
+    faceWorker = Comlink.wrap(worker)
     await faceWorker.initialise()
   }
 
@@ -40,14 +42,14 @@ export const startFaceTracking = async () => {
   faceVideo.addEventListener('loadeddata', async () => {
     await faceWorker.create(faceVideo.videoWidth, faceVideo.videoHeight)
     faceCanvas = new OffscreenCanvas(faceVideo.videoWidth, faceVideo.videoHeight)
-    const context = faceCanvas.getContext('2d')
+    const context = faceCanvas.getContext('2d') as OffscreenCanvasRenderingContext2D
     const interval = setInterval(async () => {
       context.drawImage(faceVideo, 0, 0, faceVideo.videoWidth, faceVideo.videoHeight)
       const imageData = context.getImageData(0, 0, faceVideo.videoWidth, faceVideo.videoHeight)
       const pixels = imageData.data.buffer
       const detection = await faceWorker.detect(Comlink.transfer(pixels, [pixels]))
       if (detection) {
-        faceToInput(Network.instance.localClientEntity, detection)
+        faceToInput(detection)
       }
     }, 100)
     faceTrackingTimers.push(interval)
@@ -68,23 +70,36 @@ const nameToInputValue = {
   surprised: CameraInput.Surprised
 }
 
-export async function faceToInput(entity, detection) {
+let prevExp: string = ''
+
+export async function faceToInput(detection) {
   if (detection !== undefined && detection.expressions !== undefined) {
-    // console.log(detection.expressions);
-    const input = getComponent(entity, InputComponent)
     for (const expression in detection.expressions) {
+      if (prevExp !== expression && detection.expressions[expression] >= EXPRESSION_THRESHOLD) {
+        console.log(
+          expression +
+            ' ' +
+            (detection.expressions[expression] < EXPRESSION_THRESHOLD ? 0 : detection.expressions[expression])
+        )
+        prevExp = expression
+        /*const user = useAuthState().user
+        await sendChatMessage({
+          targetObjectId: user.instanceId.value,
+          targetObjectType: 'instance',
+          text: '[emotions]' + prevExp
+        })*/
+        if (hasComponent(useWorld().localClientEntity, WebCamInputComponent)) {
+          getComponent(useWorld().localClientEntity, WebCamInputComponent).emotions.push(prevExp)
+        }
+        console.log('emotions|' + useWorld().localClientEntity + '|' + prevExp)
+      }
       // If the detected value of the expression is more than 1/3rd-ish of total, record it
       // This should allow up to 3 expressions but usually 1-2
-      const cameraInputKey = nameToInputValue[expression]
-      const inputKey = input.schema.inputMap.get(cameraInputKey)
-      if (!inputKey) {
-        // skip if expression is not in schema
-        continue
-      }
-      // set it on the map
-      input.data.set(inputKey, {
+      const inputKey = nameToInputValue[expression]
+      Engine.inputState.set(inputKey, {
         type: InputType.ONEDIM,
-        value: detection.expressions[expression] < EXPRESSION_THRESHOLD ? 0 : detection.expressions[expression]
+        value: detection.expressions[expression] < EXPRESSION_THRESHOLD ? 0 : detection.expressions[expression],
+        lifecycleState: LifecycleValue.Changed
       })
     }
   }
@@ -100,8 +115,8 @@ export const startLipsyncTracking = () => {
   let sensitivityPerPole
   let spectrum
   let spectrumRMS
-  const IndicesFrequencyFemale = []
-  const IndicesFrequencyMale = []
+  const IndicesFrequencyFemale: number[] = []
+  const IndicesFrequencyMale: number[] = []
 
   for (let m = 0; m < BoundingFrequencyMasc.length; m++) {
     IndicesFrequencyMale[m] = Math.round(((2 * FFT_SIZE) / samplingFrequency) * BoundingFrequencyMasc[m])
@@ -163,35 +178,36 @@ export const startLipsyncTracking = () => {
     const widen = 3 * Math.max(EnergyBinMasc[3], EnergyBinFem[3])
     const open = 0.8 * (Math.max(EnergyBinMasc[1], EnergyBinFem[1]) - Math.max(EnergyBinMasc[3], EnergyBinFem[3]))
 
-    lipToInput(Network.instance.localClientEntity, pucker, widen, open)
+    lipToInput(pucker, widen, open)
   }
 }
 
-export const lipToInput = (entity, pucker, widen, open) => {
-  const input = getComponent(entity, InputComponent)
-
+export const lipToInput = (pucker, widen, open) => {
   if (pucker > 0.2)
-    input.data.set(nameToInputValue['pucker'], {
+    Engine.inputState.set(nameToInputValue['pucker'], {
       type: InputType.ONEDIM,
-      value: pucker
+      value: pucker,
+      lifecycleState: LifecycleValue.Changed
     })
-  else if (input.data.has(nameToInputValue['pucker'])) input.data.delete(nameToInputValue['pucker'])
+  else if (Engine.inputState.has(nameToInputValue['pucker'])) Engine.inputState.delete(nameToInputValue['pucker'])
 
   // Calculate lips widing and apply as input
   if (widen > 0.2)
-    input.data.set(nameToInputValue['widen'], {
+    Engine.inputState.set(nameToInputValue['widen'], {
       type: InputType.ONEDIM,
-      value: widen
+      value: widen,
+      lifecycleState: LifecycleValue.Changed
     })
-  else if (input.data.has(nameToInputValue['widen'])) input.data.delete(nameToInputValue['widen'])
+  else if (Engine.inputState.has(nameToInputValue['widen'])) Engine.inputState.delete(nameToInputValue['widen'])
 
   // Calculate mouth opening and apply as input
   if (open > 0.2)
-    input.data.set(nameToInputValue['open'], {
+    Engine.inputState.set(nameToInputValue['open'], {
       type: InputType.ONEDIM,
-      value: open
+      value: open,
+      lifecycleState: LifecycleValue.Changed
     })
-  else if (input.data.has(nameToInputValue['open'])) input.data.delete(nameToInputValue['open'])
+  else if (Engine.inputState.has(nameToInputValue['open'])) Engine.inputState.delete(nameToInputValue['open'])
 }
 
 function getRMS(spectrum) {

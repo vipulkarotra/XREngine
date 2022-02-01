@@ -1,18 +1,16 @@
-import collectAnalytics from '@xrengine/server-core/src/hooks/collect-analytics'
 import groupPermissionAuthenticate from '@xrengine/server-core/src/hooks/group-permission-authenticate'
 import groupUserPermissionAuthenticate from '@xrengine/server-core/src/hooks/group-user-permission-authenticate'
-import * as authentication from '@feathersjs/authentication'
-import { disallow, isProvider, iff } from 'feathers-hooks-common'
+import authenticate from '../../hooks/authenticate'
+import { isProvider, iff } from 'feathers-hooks-common'
 import { HookContext } from '@feathersjs/feathers'
-
-const { authenticate } = authentication.hooks
+import restrictUserRole from '../../hooks/restrict-user-role'
 
 export default {
   before: {
-    all: [authenticate('jwt'), collectAnalytics()],
+    all: [authenticate()],
     find: [iff(isProvider('external'), groupUserPermissionAuthenticate() as any)],
     get: [],
-    create: [disallow('external')],
+    create: [iff(isProvider('external'), restrictUserRole('admin') as any)],
     update: [],
     patch: [],
     remove: [groupPermissionAuthenticate()]
@@ -73,12 +71,39 @@ export default {
         if (params.groupUsersRemoved !== true) {
           const groupUserCount = await app.service('group-user').find({
             query: {
-              groupId: params.query.groupId,
+              groupId: params.query!.groupId,
               $limit: 0
             }
           })
           if (groupUserCount.total < 1) {
-            await app.service('group').remove(params.query.groupId, params)
+            await app.service('group').remove(params.query!.groupId, params)
+          }
+          if (groupUserCount.total >= 1 && result.groupUserRank === 'owner') {
+            const groupAdminResult = await app.service('group-user').find({
+              query: {
+                groupId: params.query!.groupId,
+                groupUserRank: 'admin'
+              }
+            })
+            if (groupAdminResult.total > 0) {
+              const groupAdmins = groupAdminResult.data
+              const newOwner = groupAdmins[Math.floor(Math.random() * groupAdmins.length)]
+              await app.service('group-user').patch(newOwner.id, {
+                groupUserRank: 'owner'
+              })
+            } else {
+              const groupUserResult = await app.service('group-user').find({
+                query: {
+                  groupId: params.query!.groupId,
+                  groupUserRank: 'user'
+                }
+              })
+              const groupUsers = groupUserResult.data
+              const newOwner = groupUsers[Math.floor(Math.random() * groupUsers.length)]
+              await app.service('group-user').patch(newOwner.id, {
+                groupUserRank: 'owner'
+              })
+            }
           }
         }
         return context
@@ -95,4 +120,4 @@ export default {
     patch: [],
     remove: []
   }
-}
+} as any

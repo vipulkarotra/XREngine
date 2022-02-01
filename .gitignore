@@ -5,14 +5,12 @@ node_modules/
 *.swp
 *.swo
 
-#vscode
-.vscode/
-
-# npm / yarn
+# npm / yarn / pnpm
 package-lock.json
 yarn.lock
 yarn-error.log
 .yarn/
+pnpm-lock.yaml
 
 #IDEA project
 *.iml
@@ -137,19 +135,31 @@ bin/
 # JetBrains WebStorm/PhpStorm
 .idea
 
-# Hugo publish files
-packages/docs/public/
+# Docs generated file
+/docs/docs/generated/
 
 .history
 .history/*
 packages/server/upload/
 
 .dccache
-.vscode/*
-.vscode
 .DS_Store
 */.DS_Store
 
 certs/
 *.blend1
 *.ts.bak
+
+# ignore all npm dist cti outputs
+/packages/client-core/src/index.ts
+/packages/common/src/index.ts
+/packages/editor/src/index.ts
+/packages/engine/src/index.ts
+/packages/projects/index.ts
+/packages/server-core/src/index.ts
+
+/packages/client/public/projects/*
+/packages/projects/projects/*
+
+# Visual Studio Code settings
+.vscode

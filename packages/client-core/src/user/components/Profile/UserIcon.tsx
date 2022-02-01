@@ -1,34 +1,25 @@
 import React, { useState } from 'react'
-import AccountCircleIcon from '@material-ui/icons/AccountCircle'
-import Button from '@material-ui/core/Button'
-import { bindActionCreators, Dispatch } from 'redux'
-import { connect } from 'react-redux'
+import AccountCircleIcon from '@mui/icons-material/AccountCircle'
+import Button from '@mui/material/Button'
 import styles from './Profile.module.scss'
-import TextField from '@material-ui/core/TextField'
+import TextField from '@mui/material/TextField'
 import classNames from 'classnames'
-import { uploadAvatar, updateUsername } from '../../reducers/auth/service'
+import { AuthService } from '../../services/AuthService'
 import { useTranslation } from 'react-i18next'
-
-const mapDispatchToProps = (dispatch: Dispatch): any => ({
-  uploadAvatar: bindActionCreators(uploadAvatar, dispatch),
-  updateUsername: bindActionCreators(updateUsername, dispatch)
-})
+import { useAuthState } from '../../services/AuthService'
 
 interface Props {
   avatarUrl: string
-  uploadAvatar?: typeof uploadAvatar
-  updateUsername?: typeof updateUsername
   auth: any
 }
 
 const UserProfile = (props: Props): any => {
   const { auth } = props
-  const user = auth.get('user')
+  const user = useAuthState().user
   const { t } = useTranslation()
-
   const [file, setFile] = useState({})
   const [fileUrl, setFileUrl] = useState('')
-  const [username, setUsername] = useState(user.name)
+  const [username, setUsername] = useState(user.name.value)
   const handleChange = (e: any): void => {
     const efile = e.target.files[0]
     const formData = new FormData()
@@ -48,7 +39,7 @@ const UserProfile = (props: Props): any => {
   }
 
   const handleSubmit = async (): Promise<void> => {
-    await props.uploadAvatar(file)
+    await AuthService.uploadAvatar(file)
   }
 
   const handleUsernameChange = (e: any): void => {
@@ -56,7 +47,7 @@ const UserProfile = (props: Props): any => {
     setUsername(name)
   }
   const updateUsername = async (): Promise<void> => {
-    await props.updateUsername(user.id, username)
+    await AuthService.updateUsername(user.id.value!, username)
   }
   return (
     <div className={styles['user-container']}>
@@ -69,7 +60,7 @@ const UserProfile = (props: Props): any => {
           label={t('user:profile.userIcon.lbl-name')}
           name="name"
           autoFocus
-          defaultValue={user.name}
+          defaultValue={user.name.value}
           onChange={(e) => handleUsernameChange(e)}
         />
         <Button variant="contained" color="primary" onClick={updateUsername}>
@@ -78,13 +69,13 @@ const UserProfile = (props: Props): any => {
       </div>
       <div className={styles['user-id']}>
         <div>
-          {t('user:profile.userIcon.userId')}: {user.id}
+          {t('user:profile.userIcon.userId')}: {user.id.value}
         </div>
       </div>
       <div className={styles.uploadform}>
         {fileUrl ? (
           <img
-            src={URL.createObjectURL(fileUrl)}
+            src={fileUrl}
             className={classNames({
               [styles.rounded]: true,
               [styles['mx-auto']]: true,
@@ -128,4 +119,4 @@ const UserProfile = (props: Props): any => {
   )
 }
 
-export default connect(null, mapDispatchToProps)(UserProfile)
+export default UserProfile

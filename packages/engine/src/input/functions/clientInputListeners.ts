@@ -1,5 +1,4 @@
 import { handleGamepadConnected, handleGamepadDisconnected } from './GamepadInput'
-import { Engine } from '../../ecs/classes/Engine'
 import {
   handleContextMenu,
   handleKey,
@@ -15,6 +14,7 @@ import {
   handleWindowFocus
 } from '../schema/ClientInputSchema'
 import { EngineRenderer } from '../../renderer/WebGLRendererSystem'
+import { isClient } from '../../common/functions/isClient'
 
 const supportsPassive = (function () {
   let supportsPassiveValue = false
@@ -24,8 +24,8 @@ const supportsPassive = (function () {
         supportsPassiveValue = true
       }
     })
-    window.addEventListener('testPassive', null, opts)
-    window.removeEventListener('testPassive', null, opts)
+    window.addEventListener('testPassive', null!, opts)
+    window.removeEventListener('testPassive', null!, opts)
   } catch (error) {}
   return supportsPassiveValue
 })()
@@ -51,11 +51,14 @@ interface ListenerBindingData {
 
 const boundListeners: ListenerBindingData[] = []
 
-export const addClientInputListeners = (canvas: HTMLCanvasElement) => {
+export const addClientInputListeners = () => {
+  if (!isClient) return
+  const canvas = EngineRenderer.instance.canvas
+
   window.addEventListener('DOMMouseScroll', preventDefault, false)
   window.addEventListener('keydown', preventDefaultForScrollKeys, false)
 
-  const addListener = (domElement, eventName, callback, passive = false) => {
+  const addListener = (domElement, eventName, callback: (event: Event) => void, passive = false) => {
     if (passive && supportsPassive) {
       domElement.addEventListener(eventName, callback, { passive })
     } else {
@@ -79,7 +82,7 @@ export const addClientInputListeners = (canvas: HTMLCanvasElement) => {
   addListener(
     canvas,
     'touchstart',
-    (e) => {
+    (e: TouchEvent) => {
       handleTouch(e)
       handleTouchMove(e)
     },
@@ -105,6 +108,9 @@ export const addClientInputListeners = (canvas: HTMLCanvasElement) => {
 }
 
 export const removeClientInputListeners = () => {
+  // if not client, no listeners will exist
+  if (!boundListeners.length) return
+
   window.removeEventListener('DOMMouseScroll', preventDefault, false)
   window.removeEventListener('keydown', preventDefaultForScrollKeys, false)
 

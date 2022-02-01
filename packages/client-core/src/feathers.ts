@@ -1,20 +1,23 @@
 import io from 'socket.io-client'
 import feathers from '@feathersjs/client'
-import { Config } from '@xrengine/common/src/config'
+// import type { Application } from '../../server-core/declarations'
 
-const feathersStoreKey: string = Config.publicRuntimeConfig.feathersStoreKey
-const feathersClient: any = !Config.publicRuntimeConfig.offlineMode ? feathers() : undefined
+const feathersClient = feathers() // as Application
+const serverHost =
+  process.env.APP_ENV === 'development' || process.env['VITE_LOCAL_BUILD'] === 'true'
+    ? `https://${(globalThis as any).process.env['VITE_SERVER_HOST']}:${
+        (globalThis as any).process.env['VITE_SERVER_PORT']
+      }`
+    : `https://${(globalThis as any).process.env['VITE_SERVER_HOST']}`
 
-if (!Config.publicRuntimeConfig.offlineMode) {
-  const socket = io(Config.publicRuntimeConfig.apiServer, {
-    withCredentials: true
+const socket = io(serverHost, {
+  withCredentials: true
+})
+feathersClient.configure(feathers.socketio(socket, { timeout: 10000 }))
+feathersClient.configure(
+  feathers.authentication({
+    storageKey: globalThis.process.env['VITE_FEATHERS_STORE_KEY']
   })
-  feathersClient.configure(feathers.socketio(socket, { timeout: 10000 }))
-  feathersClient.configure(
-    feathers.authentication({
-      storageKey: feathersStoreKey
-    })
-  )
-}
+)
 
 export const client = feathersClient

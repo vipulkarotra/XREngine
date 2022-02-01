@@ -1,33 +1,26 @@
+import Button from '@mui/material/Button'
+import Dialog from '@mui/material/Dialog'
+import DialogActions from '@mui/material/DialogActions'
+import DialogContent from '@mui/material/DialogContent'
+import DialogTitle from '@mui/material/DialogTitle'
+import TextField from '@mui/material/TextField'
 import React from 'react'
-import Button from '@material-ui/core/Button'
-import TextField from '@material-ui/core/TextField'
-import Dialog from '@material-ui/core/Dialog'
-import DialogActions from '@material-ui/core/DialogActions'
-import DialogContent from '@material-ui/core/DialogContent'
-import DialogTitle from '@material-ui/core/DialogTitle'
-import { bindActionCreators, Dispatch } from 'redux'
-import { connect } from 'react-redux'
-import { fetchUserRole, createUserRoleAction } from '../../reducers/admin/user/service'
-import { useStyles, useStyle } from './styles'
+import { UserRoleService } from '../../services/UserRoleService'
+import { useUserStyle, useUserStyles } from './styles'
+
 interface Props {
   open: boolean
   handleClose: any
-  createUserRoleAction?: any
 }
 
-const mapDispatchToProps = (dispatch: Dispatch): any => ({
-  fetchUserRole: bindActionCreators(fetchUserRole, dispatch),
-  createUserRoleAction: bindActionCreators(createUserRoleAction, dispatch)
-})
-
 const createUser = (props: Props) => {
-  const { open, handleClose, createUserRoleAction } = props
-  const classes = useStyles()
-  const classx = useStyle()
+  const { open, handleClose } = props
+  const classes = useUserStyles()
+  const classx = useUserStyle()
   const [role, setRole] = React.useState('')
 
   const createUserRole = async () => {
-    await createUserRoleAction({ role })
+    await UserRoleService.createUserRoleAction({ role })
     handleClose()
     setRole('')
   }
@@ -67,4 +60,4 @@ const createUser = (props: Props) => {
   )
 }
 
-export default connect(null, mapDispatchToProps)(createUser)
+export default createUser

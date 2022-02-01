@@ -1,86 +1,49 @@
-import Backdrop from '@material-ui/core/Backdrop'
-import Button from '@material-ui/core/Button'
-import Fade from '@material-ui/core/Fade'
-import FormControl from '@material-ui/core/FormControl'
-import FormControlLabel from '@material-ui/core/FormControlLabel'
-import FormGroup from '@material-ui/core/FormGroup'
-import InputLabel from '@material-ui/core/InputLabel'
-import MenuItem from '@material-ui/core/MenuItem'
-import Modal from '@material-ui/core/Modal'
-import Select from '@material-ui/core/Select'
-import Switch from '@material-ui/core/Switch'
-import TextField from '@material-ui/core/TextField'
-import Checkbox from '@material-ui/core/Checkbox'
+import Button from '@mui/material/Button'
+import Fade from '@mui/material/Fade'
+import FormControl from '@mui/material/FormControl'
+import FormControlLabel from '@mui/material/FormControlLabel'
+import FormGroup from '@mui/material/FormGroup'
+import InputLabel from '@mui/material/InputLabel'
+import MenuItem from '@mui/material/MenuItem'
+import Modal from '@mui/material/Modal'
+import Select from '@mui/material/Select'
+import Switch from '@mui/material/Switch'
+import TextField from '@mui/material/TextField'
+import Checkbox from '@mui/material/Checkbox'
 import classNames from 'classnames'
 import React, { useEffect, useState } from 'react'
-import { connect } from 'react-redux'
-import { bindActionCreators, Dispatch } from 'redux'
-import { createLocation, patchLocation, removeLocation } from '../../../../admin/reducers/admin/location/service'
-import { selectAppState } from '../../../../common/reducers/app/selector'
-import { selectAuthState } from '../../../../user/reducers/auth/selector'
-import styles from '../../../../admin/components/Admin.module.scss'
-import Tooltip from '@material-ui/core/Tooltip'
+import { useDispatch } from '@xrengine/client-core/src/store'
+
+import { LocationService } from '@xrengine/client-core/src/admin/services/LocationService'
+
+import styles from './styles.module.scss'
+import Tooltip from '@mui/material/Tooltip'
 import { useTranslation } from 'react-i18next'
-import { selectAdminSceneState } from '../../../../admin/reducers/admin/scene/selector'
-import { selectAdminLocationState } from '../../../../admin/reducers/admin/location/selector'
+import { useSceneState } from '@xrengine/client-core/src/admin/services/SceneService'
+import { useLocationState } from '@xrengine/client-core/src/admin/services/LocationService'
 import { useParams } from 'react-router-dom'
-import { createPublishProject } from '../../../reducers/scenes/service'
+import { SceneDetailInterface } from '@xrengine/common/src/interfaces/SceneInterface'
 
 interface Props {
   open: boolean
   handleClose: any
   location: any
   editing: boolean
-  adminState?: any
-  createLocation?: any
-  patchLocation?: any
-  removeLocation?: any
-  adminSceneState?: any
-  adminLocationState?: any
-
-  createPublishProject?: any
 }
-
-const mapStateToProps = (state: any): any => {
-  return {
-    appState: selectAppState(state),
-    authState: selectAuthState(state),
-    adminSceneState: selectAdminSceneState(state),
-    adminLocationState: selectAdminLocationState(state)
-  }
-}
-
-const mapDispatchToProps = (dispatch: Dispatch): any => ({
-  createLocation: bindActionCreators(createLocation, dispatch),
-  patchLocation: bindActionCreators(patchLocation, dispatch),
-  removeLocation: bindActionCreators(removeLocation, dispatch),
-  createPublishProject: bindActionCreators(createPublishProject, dispatch)
-})
 
 const LocationModal = (props: Props): any => {
-  const {
-    open,
-    handleClose,
-    location,
-    editing,
-    createLocation,
-    patchLocation,
-    removeLocation,
-    adminSceneState,
-    adminLocationState,
-    createPublishProject
-  } = props
+  const { open, handleClose, location, editing } = props
 
   const [name, setName] = useState('')
   const [sceneId, setSceneId] = useState('')
   const [maxUsers, setMaxUsers] = useState(10)
   const [videoEnabled, setVideoEnabled] = useState(false)
   const [instanceMediaChatEnabled, setInstanceMediaChatEnabled] = useState(false)
-  const [scene, setScene] = useState('')
+  const [scene, setScene] = useState<SceneDetailInterface>(null!)
   const [locationType, setLocationType] = useState('private')
-  const adminScenes = adminSceneState.get('scenes').get('scenes')
-  const locationTypes = adminLocationState.get('locationTypes').get('locationTypes')
-
+  const adminScenes = useSceneState().scenes
+  const locationTypes = useLocationState().locationTypes
+  const dispatch = useDispatch()
   const [state, setState] = React.useState({
     feature: false,
     lobby: false
@@ -107,22 +70,21 @@ const LocationModal = (props: Props): any => {
       scene: {
         model_file_id: 'model_file_id',
         screenshot_file_id: 'screenshot_file_id',
-        id: scene.id
+        id: (scene as any).id
       }
     }
 
     if (editing === true) {
-      patchLocation(location.id, submission)
+      LocationService.patchLocation(location.id, submission)
     } else {
-      createPublishProject(submission)
-      //   createLocation(submission)
+      // TODO
     }
 
     handleClose()
   }
 
   const deleteLocation = () => {
-    removeLocation(location.id)
+    LocationService.removeLocation(location.id)
     handleClose()
   }
 
@@ -150,11 +112,11 @@ const LocationModal = (props: Props): any => {
 
   useEffect(() => {
     if (currentScene) {
-      const temp = adminScenes.find((el) => el.sid === currentScene.projectId)
-      console.log('====================================')
-      console.log(temp)
-      console.log('====================================')
-      setScene(temp)
+      const temp = adminScenes.value.find((el) => (el as any).sid === (currentScene as any).projectId)
+      //console.log('====================================')
+      //console.log(temp)
+      //console.log('====================================')
+      if (temp) setScene(temp)
     }
   }, [adminScenes, currentScene])
 
@@ -171,10 +133,6 @@ const LocationModal = (props: Props): any => {
         open={open}
         onClose={handleClose}
         closeAfterTransition
-        BackdropComponent={Backdrop}
-        BackdropProps={{
-          timeout: 500
-        }}
       >
         <Fade in={props.open}>
           <div
@@ -230,7 +188,7 @@ const LocationModal = (props: Props): any => {
                 label={t('admin:components.locationModel.lbl-scene')}
                 name="scene"
                 required
-                value={`${scene.name} (${scene.sid})`}
+                value={`${scene.name} (${(scene as any).sid})`}
                 onChange={(e) => setSceneId(e.target.value as string)}
                 disabled
               />
@@ -243,8 +201,10 @@ const LocationModal = (props: Props): any => {
                   value={sceneId}
                   onChange={(e) => setSceneId(e.target.value as string)}
                 >
-                  {adminScenes.map((scene) => (
-                    <MenuItem key={scene.sid} value={scene.sid}>{`${scene.name} (${scene.sid})`}</MenuItem>
+                  {adminScenes.value.map((scene) => (
+                    <MenuItem key={(scene as any).sid} value={(scene as any).sid}>{`${scene.name} (${
+                      (scene as any).sid
+                    })`}</MenuItem>
                   ))}
                 </Select>
               </FormControl>
@@ -258,7 +218,7 @@ const LocationModal = (props: Props): any => {
                 value={locationType}
                 onChange={(e) => setLocationType(e.target.value as string)}
               >
-                {locationTypes.map((type) => (
+                {locationTypes.value.map((type) => (
                   <MenuItem key={type.type} value={type.type}>
                     {type.type}
                   </MenuItem>
@@ -276,7 +236,7 @@ const LocationModal = (props: Props): any => {
                       name="videoEnabled"
                     />
                   }
-                  label={t('admin:components.locationModel.lbl-ve')}
+                  label={t('admin:components.locationModel.lbl-ve') as string}
                 />
               </FormControl>
             </FormGroup>
@@ -291,7 +251,7 @@ const LocationModal = (props: Props): any => {
                       name="instanceMediaChatEnabled"
                     />
                   }
-                  label={t('admin:components.locationModel.lbl-gme')}
+                  label={t('admin:components.locationModel.lbl-gme') as string}
                 />
               </FormControl>
             </FormGroup>
@@ -299,12 +259,12 @@ const LocationModal = (props: Props): any => {
             {!location.isLobby && (
               <FormControlLabel
                 control={<Checkbox checked={state.lobby} onChange={handleChange} name="lobby" color="primary" />}
-                label={t('admin:components.locationModel.lbl-lobby')}
+                label={t('admin:components.locationModel.lbl-lobby') as string}
               />
             )}
             <FormControlLabel
               control={<Checkbox checked={state.feature} onChange={handleChange} name="feature" color="primary" />}
-              label={t('admin:components.locationModel.lbl-featured')}
+              label={t('admin:components.locationModel.lbl-featured') as string}
             />
             <FormGroup row className={styles.locationModalButtons}>
               {editing === true && (
@@ -322,7 +282,7 @@ const LocationModal = (props: Props): any => {
               </Button>
               {editing === true && (
                 <Tooltip
-                  title={state.lobby ? t('admin:components.locationModel.tooltipCanNotBeDeleted') : ''}
+                  title={state.lobby ? t('admin:components.locationModel.tooltipCanNotBeDeleted') || '' : ''}
                   arrow
                   placement="top"
                 >
@@ -347,4 +307,4 @@ const LocationModal = (props: Props): any => {
   )
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(LocationModal)
+export default LocationModal

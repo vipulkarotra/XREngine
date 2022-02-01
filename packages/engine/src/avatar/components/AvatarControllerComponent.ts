@@ -1,10 +1,11 @@
-import type { Controller } from 'three-physx'
-import { PerspectiveCamera, Vector3 } from 'three'
-import { VectorSpringSimulator } from '../../physics/classes/VectorSpringSimulator'
-import { createMappedComponent } from '../../ecs/functions/EntityFunctions'
+import { Vector3 } from 'three'
+import { VectorSpringSimulator } from '../../physics/classes/springs/VectorSpringSimulator'
+import { createMappedComponent } from '../../ecs/functions/ComponentFunctions'
 
 export type AvatarControllerComponentType = {
-  controller: Controller
+  controller: PhysX.PxCapsuleController
+  filterData: PhysX.PxFilterData
+  collisions: [boolean, boolean, boolean]
   movementEnabled: boolean
   isJumping: boolean
   isWalking: boolean
@@ -12,4 +13,5 @@ export type AvatarControllerComponentType = {
   velocitySimulator: VectorSpringSimulator
 }
 
-export const AvatarControllerComponent = createMappedComponent<AvatarControllerComponentType>()
+export const AvatarControllerComponent =
+  createMappedComponent<AvatarControllerComponentType>('AvatarControllerComponent')

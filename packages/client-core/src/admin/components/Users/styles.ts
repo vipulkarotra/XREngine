@@ -1,23 +1,42 @@
-import { createStyles, makeStyles, Theme } from '@material-ui/core/styles'
+import { Theme } from '@mui/material/styles'
 
-export const useStyles = makeStyles((theme: Theme) =>
+import createStyles from '@mui/styles/createStyles'
+import makeStyles from '@mui/styles/makeStyles'
+
+export const useUserStyles = makeStyles((theme: Theme) =>
   createStyles({
     large: {
       width: theme.spacing(14),
       height: theme.spacing(14),
-      marginTop: '20%'
+      [theme.breakpoints.down('lg')]: {
+        width: '80px',
+        height: '80px'
+      }
+    },
+    pad: {
+      padding: '20px'
+    },
+    centering: {
+      justifyContent: 'center'
     },
     paperHeight: {
       height: '20vh',
       background: '#111',
       color: '#f1f1f1',
-      backgroundColor: '#343b41'
+      backgroundColor: '#343b41',
+      [theme.breakpoints.down('md')]: {
+        height: '15vh'
+      }
     },
     mt20: {
       marginTop: '20%'
     },
     mt10: {
       marginTop: '10%'
+    },
+    mt5: {
+      marginTop: '5%',
+      marginLeft: '0px'
     },
     mb10: {
       marginBottom: '10%'
@@ -30,7 +49,10 @@ export const useStyles = makeStyles((theme: Theme) =>
       display: 'flex',
       alignItems: 'center',
       width: '100%',
-      background: '#343b41'
+      background: '#343b41',
+      [theme.breakpoints.down('sm')]: {
+        padding: '2px 5px'
+      }
     },
     input: {
       marginLeft: theme.spacing(1),
@@ -54,10 +76,11 @@ export const useStyles = makeStyles((theme: Theme) =>
       color: '#ff9966'
     },
     marginTp: {
-      marginTop: '20%'
+      marginTop: '20%',
+      overflow: 'auto'
     },
     marginTop: {
-      marginTop: '7%'
+      marginTop: '5px'
     },
     texAlign: {
       textAlign: 'center'
@@ -80,7 +103,11 @@ export const useStyles = makeStyles((theme: Theme) =>
       margin: 'auto 5px',
       width: '100%',
       background: 'rgb(58, 65, 73)',
-      color: '#f1f1f1 !important'
+      color: '#f1f1f1 !important',
+      [theme.breakpoints.down('sm')]: {
+        fontSize: '12px',
+        padding: '2px'
+      }
     },
     rootTable: {
       flexGrow: 1,
@@ -117,57 +144,94 @@ export const useStyles = makeStyles((theme: Theme) =>
     },
     selector: {
       width: '100%'
+    },
+    scopeContainer: {
+      maxHeight: '200px',
+      width: '460px',
+      overflowY: 'scroll',
+      [theme.breakpoints.down('lg')]: {
+        width: '100%'
+      }
+    },
+    headingFont: {
+      width: '100%',
+      [theme.breakpoints.down('lg')]: {
+        fontSize: '1.6rem'
+      },
+      [theme.breakpoints.between(100, 0)]: {
+        fontSize: '1.4rem'
+      }
+    },
+    typoFont: {
+      [theme.breakpoints.down('lg')]: {
+        fontSize: '1.3rem'
+      }
+    },
+    typoFontTitle: {
+      [theme.breakpoints.down('md')]: {
+        fontSize: '1.3rem'
+      }
     }
   })
 )
 
-export const useStyle = makeStyles({
-  paper: {
-    width: '40%',
-    backgroundColor: '#43484F',
-    color: '#f1f1f1'
-  },
-  paperDialog: {
-    background: 'rgb(58, 65, 73) !important',
-    color: '#f1f1f1'
-  },
-  root: {
-    width: '100%'
-  },
-  container: {
-    maxHeight: '80vh'
-  },
-  actionStyle: {
-    textDecoration: 'none',
-    color: '#000',
-    marginRight: '10px'
-  },
-  saveBtn: {
-    marginLeft: 'auto',
-    background: '#43484F !important',
-    color: '#fff !important',
-    width: '150px',
-    marginRight: '25px',
-    boxShadow:
-      '0px 3px 1px -2px rgb(0 0 0 / 20%), 0px 2px 2px 0px rgb(0 0 0 / 14%), 0px 1px 5px 0px rgb(0 0 0 / 12%) !important'
-  },
-  spanDange: {
-    color: '#FF8C00'
-  },
-  spanNone: {
-    color: '#808080'
-  },
-  spanWhite: {
-    color: '#f1f1f1'
-  },
-  list: {
-    width: 250
-  },
-  fullList: {
-    width: 'auto'
-  },
-  selectPaper: {
-    background: '#343b41',
-    color: '#f1f1f1'
-  }
-})
+export const useUserStyle = makeStyles((theme: Theme) =>
+  createStyles({
+    paper: {
+      width: '40%',
+      marginTop: '65px',
+      backgroundColor: '#43484F',
+      color: '#f1f1f1',
+      overflow: 'auto'
+    },
+    paperDialog: {
+      background: 'rgb(58, 65, 73) !important',
+      color: '#f1f1f1'
+    },
+    root: {
+      width: '100%'
+    },
+    container: {
+      maxHeight: '73vh'
+    },
+    actionStyle: {
+      textDecoration: 'none',
+      color: '#000',
+      marginRight: '10px'
+    },
+    saveBtn: {
+      marginLeft: 'auto',
+      background: '#43484F !important',
+      color: '#fff !important',
+      width: '150px',
+      marginRight: '25px',
+      boxShadow:
+        '0px 3px 1px -2px rgb(0 0 0 / 20%), 0px 2px 2px 0px rgb(0 0 0 / 14%), 0px 1px 5px 0px rgb(0 0 0 / 12%) !important',
+      [theme.breakpoints.down('lg')]: {
+        width: '120px'
+      },
+      [theme.breakpoints.between(100, 0)]: {
+        width: '80px'
+      }
+    },
+    spanDange: {
+      color: '#FF8C00'
+    },
+    spanNone: {
+      color: '#808080'
+    },
+    spanWhite: {
+      color: '#f1f1f1'
+    },
+    list: {
+      width: 250
+    },
+    fullList: {
+      width: 'auto'
+    },
+    selectPaper: {
+      background: '#343b41',
+      color: '#f1f1f1'
+    }
+  })
+)

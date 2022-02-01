@@ -1,55 +1,45 @@
 import React from 'react'
-import Table from '@material-ui/core/Table'
-import TableBody from '@material-ui/core/TableBody'
-import TableCell from '@material-ui/core/TableCell'
-import Dialog from '@material-ui/core/Dialog'
-import DialogActions from '@material-ui/core/DialogActions'
-import DialogContent from '@material-ui/core/DialogContent'
-import DialogContentText from '@material-ui/core/DialogContentText'
-import DialogTitle from '@material-ui/core/DialogTitle'
-import Button from '@material-ui/core/Button'
-import { TableContainer, TableHead, TablePagination, TableRow } from '@material-ui/core'
-import { bindActionCreators, Dispatch } from 'redux'
-import { connect } from 'react-redux'
-import { selectGroupState } from '../../reducers/admin/group/selector'
-import { getGroupService, deleteGroup } from '../../reducers/admin/group/service'
-import { selectAuthState } from '../../../user/reducers/auth/selector'
+import Table from '@mui/material/Table'
+import TableBody from '@mui/material/TableBody'
+import TableCell from '@mui/material/TableCell'
+import Dialog from '@mui/material/Dialog'
+import DialogActions from '@mui/material/DialogActions'
+import DialogContent from '@mui/material/DialogContent'
+import DialogContentText from '@mui/material/DialogContentText'
+import DialogTitle from '@mui/material/DialogTitle'
+import Button from '@mui/material/Button'
+import { TableContainer, TableHead, TablePagination, TableRow } from '@mui/material'
+import { useDispatch } from '../../../store'
+import { useGroupState } from '../../services/GroupService'
+import { GroupService } from '../../services/GroupService'
+import { useAuthState } from '../../../user/services/AuthService'
 import { columns, Data } from './Variables'
-import { useStyles, useStyle } from './styles'
+import { useGroupStyles, useGroupStyle } from './styles'
 import ViewGroup from './ViewGroup'
+import { GROUP_PAGE_LIMIT } from '../../services/GroupService'
+import { Group } from '@xrengine/common/src/interfaces/Group'
 
-interface Props {
-  adminGroupState?: any
-  fetchAdminGroup?: any
-  deleteGroup?: any
-  authState?: any
-}
-
-const mapStateToProps = (state: any): any => ({
-  adminGroupState: selectGroupState(state),
-  authState: selectAuthState(state)
-})
-
-const mapDispatchToProps = (dispatch: Dispatch): any => ({
-  fetchAdminGroup: bindActionCreators(getGroupService, dispatch),
-  deleteGroup: bindActionCreators(deleteGroup, dispatch)
-})
+interface Props {}
 
 const GroupTable = (props: Props) => {
-  const { adminGroupState, fetchAdminGroup, authState, deleteGroup } = props
-  const classes = useStyles()
-  const classx = useStyle()
+  const dispatch = useDispatch()
+  const classes = useGroupStyles()
+  const classx = useGroupStyle()
 
-  const user = authState.get('user')
+  const user = useAuthState().user
   const [viewModel, setViewModel] = React.useState(false)
-  const [singleGroup, setSingleGroup] = React.useState('')
+  const [singleGroup, setSingleGroup] = React.useState<Group>(null!)
   const [page, setPage] = React.useState(0)
-  const [rowsPerPage, setRowsPerPage] = React.useState(12)
+  const [rowsPerPage, setRowsPerPage] = React.useState(GROUP_PAGE_LIMIT)
   const [groupId, setGroupId] = React.useState('')
   const [showWarning, setShowWarning] = React.useState(false)
-  const adminGroups = adminGroupState.get('group').get('group')
+  const adminGroupState = useGroupState()
+  const adminGroups = adminGroupState.group
+  const adminGroupCount = adminGroupState.total
 
   const handlePageChange = (event: unknown, newPage: number) => {
+    const incDec = page < newPage ? 'increment' : 'decrement'
+    GroupService.getGroupService(incDec)
     setPage(newPage)
   }
 
@@ -59,9 +49,11 @@ const GroupTable = (props: Props) => {
   }
 
   const handleViewGroup = (id: string) => {
-    const group = adminGroups.find((group) => group.id === id)
-    setSingleGroup(group)
-    setViewModel(true)
+    const group = adminGroups.value.find((group) => group.id === id)
+    if (group !== null) {
+      setSingleGroup(group!)
+      setViewModel(true)
+    }
   }
 
   const handleCloseWarning = () => {
@@ -75,7 +67,7 @@ const GroupTable = (props: Props) => {
 
   const deleteGroupHandler = () => {
     setShowWarning(false)
-    deleteGroup(groupId)
+    GroupService.deleteGroupByAdmin(groupId)
   }
 
   const closeViewModel = (open) => {
@@ -83,11 +75,8 @@ const GroupTable = (props: Props) => {
   }
 
   React.useEffect(() => {
-    const fetchGroups = async () => {
-      await fetchAdminGroup()
-    }
-    if (adminGroupState.get('group').get('updateNeeded')) fetchGroups()
-  }, [adminGroupState, user])
+    if (adminGroupState.updateNeeded.value) GroupService.getGroupService()
+  }, [adminGroupState.updateNeeded.value, user])
 
   const createData = (id: any, name: any, description: string): Data => {
     return {
@@ -108,11 +97,9 @@ const GroupTable = (props: Props) => {
     }
   }
 
-  const rows = adminGroups.map((el) => {
-    return createData(el.id, el.name, el.description)
+  const rows = adminGroups.value.map((el) => {
+    return createData(el.id, el.name, el.description!)
   })
-
-  const count = rows.size ? rows.size : rows.length
 
   return (
     <div className={classx.root}>
@@ -133,7 +120,7 @@ const GroupTable = (props: Props) => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {rows.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((row, id) => {
+            {rows.map((row, id) => {
               return (
                 <TableRow hover role="checkbox" tabIndex={-1} key={row.id}>
                   {columns.map((column) => {
@@ -151,9 +138,9 @@ const GroupTable = (props: Props) => {
         </Table>
       </TableContainer>
       <TablePagination
-        rowsPerPageOptions={[12]}
+        rowsPerPageOptions={[GROUP_PAGE_LIMIT]}
         component="div"
-        count={count || 12}
+        count={adminGroupCount.value}
         rowsPerPage={rowsPerPage}
         page={page}
         onPageChange={handlePageChange}
@@ -188,4 +175,4 @@ const GroupTable = (props: Props) => {
   )
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(GroupTable)
+export default GroupTable

@@ -1,9 +1,9 @@
 import { Euler, Quaternion, Vector3 } from 'three'
 import { Entity } from '../../ecs/classes/Entity'
-import { getComponent } from '../../ecs/functions/EntityFunctions'
+import { getComponent } from '../../ecs/functions/ComponentFunctions'
 import { AvatarComponent } from '../components/AvatarComponent'
 import { AvatarControllerComponent } from '../components/AvatarControllerComponent'
-import { rotateViewVectorXZ } from '../../camera/systems/CameraSystem'
+// import { rotateViewVectorXZ } from '../../camera/systems/CameraSystem'
 
 export const teleportPlayer = (playerEntity: Entity, position: Vector3, rotation: Quaternion): void => {
   const controller = getComponent(playerEntity, AvatarControllerComponent)
@@ -15,12 +15,8 @@ export const teleportPlayer = (playerEntity: Entity, position: Vector3, rotation
 
   const pos = new Vector3(position.x, position.y, position.z)
   pos.y += actor.avatarHalfHeight
-  controller.controller.updateTransform({
-    translation: pos,
-    rotation
-  })
+  controller.controller.setPosition(pos)
 
   const euler = new Euler().setFromQuaternion(rotation)
-  rotateViewVectorXZ(actor.viewVector, euler.y)
-  controller.controller.velocity.setScalar(0)
+  // rotateViewVectorXZ(actor.viewVector, euler.y)
 }

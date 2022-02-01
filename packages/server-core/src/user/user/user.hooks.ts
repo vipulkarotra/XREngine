@@ -1,10 +1,11 @@
-import * as authentication from '@feathersjs/authentication'
-import addAssociations from '@xrengine/server-core/src/hooks/add-associations'
 import { HookContext } from '@feathersjs/feathers'
+import addAssociations from '@xrengine/server-core/src/hooks/add-associations'
+import addScopeToUser from '../../hooks/add-scope-to-user'
+import authenticate from '../../hooks/authenticate'
+import restrictUserRole from '../../hooks/restrict-user-role'
+import { iff, isProvider } from 'feathers-hooks-common'
 import logger from '../../logger'
 import getFreeInviteCode from '../../util/get-free-invite-code'
-
-const { authenticate } = authentication.hooks
 
 /**
  * This module used to declare and identify database relation
@@ -13,12 +14,15 @@ const { authenticate } = authentication.hooks
 
 export default {
   before: {
-    all: [authenticate('jwt')],
+    all: [authenticate()],
     find: [
       addAssociations({
         models: [
           {
             model: 'identity-provider'
+          },
+          {
+            model: 'user-api-key'
           },
           // {
           //   model: 'subscription'
@@ -37,6 +41,14 @@ export default {
           },
           {
             model: 'scope'
+          },
+          {
+            model: 'inventory-item',
+            include: [
+              {
+                model: 'inventory-item-type'
+              }
+            ]
           }
         ]
       })
@@ -47,6 +59,9 @@ export default {
           {
             model: 'identity-provider'
           },
+          {
+            model: 'user-api-key'
+          },
           // {
           //   model: 'subscription'
           // },
@@ -61,18 +76,30 @@ export default {
           },
           {
             model: 'scope'
+          },
+          {
+            model: 'inventory-item',
+            include: [
+              {
+                model: 'inventory-item-type'
+              }
+            ]
           }
         ]
       })
     ],
-    create: [],
-    update: [],
+    create: [iff(isProvider('external'), restrictUserRole('admin') as any)],
+    update: [iff(isProvider('external'), restrictUserRole('admin') as any)],
     patch: [
+      iff(isProvider('external'), restrictUserRole('admin') as any),
       addAssociations({
         models: [
           {
             model: 'identity-provider'
           },
+          {
+            model: 'user-api-key'
+          },
           // {
           //   model: 'subscription'
           // },
@@ -87,106 +114,132 @@ export default {
           },
           {
             model: 'scope'
+          },
+          {
+            model: 'inventory-item',
+            include: [
+              {
+                model: 'inventory-item-type'
+              }
+            ]
           }
         ]
       }),
-      async (context: HookContext): Promise<HookContext> => {
-        const foundItem = await context.app.service('scope').Model.findAll({
-          where: {
-            userId: context.arguments[0]
-          }
-        })
-        if (!foundItem.length) {
-          context.arguments[1]?.scopeType?.forEach(async (el) => {
-            await context.app.service('scope').create({
-              type: el.type,
-              userId: context.arguments[0]
-            })
-          })
-        } else {
-          foundItem.forEach(async (scp) => {
-            await context.app.service('scope').remove(scp.dataValues.id)
-          })
-          context.arguments[1]?.scopeType?.forEach(async (el) => {
-            await context.app.service('scope').create({
-              type: el.type,
-              userId: context.arguments[0]
-            })
-          })
-        }
-        return context
-      }
+      addScopeToUser()
     ],
-    remove: []
+    remove: [
+      iff(isProvider('external'), restrictUserRole('admin') as any),
+      async (context: HookContext): Promise<HookContext> => {
+        try {
+          const userId = context.id
+          await context.app.service('user-api-key').remove(null, {
+            query: {
+              userId: userId
+            }
+          })
+          return context
+        } catch (err) {
+          throw new Error(err)
+        }
+      }
+    ]
   },
 
   after: {
     all: [],
     find: [
-      async (context: HookContext): Promise<HookContext> => {
+      (context: HookContext): HookContext => {
         try {
-          const { app, result } = context
-
-          result.data.forEach(async (item) => {
-            if (item.subscriptions && item.subscriptions.length > 0) {
-              await Promise.all(
-                item.subscriptions.map(async (subscription: any) => {
-                  subscription.dataValues.subscriptionType = await context.app
-                    .service('subscription-type')
-                    .get(subscription.plan)
-                })
-              )
+          if (context.result?.data) {
+            for (let x = 0; x < context.result.data.length; x++) {
+              for (let i = 0; i < context.result.data[x].inventory_items?.length; i++) {
+                context.result.data[x].inventory_items[i].metadata = JSON.parse(
+                  context.result.data[x].inventory_items[i].metadata
+                )
+              }
             }
-
-            // const userAvatarResult = await app.service('static-resource').find({
-            //   query: {
-            //     staticResourceType: 'user-thumbnail',
-            //     userId: item.id
-            //   }
-            // });
-            //
-            // if (userAvatarResult.total > 0 && item.dataValues) {
-            //   item.dataValues.avatarUrl = userAvatarResult.data[0].url;
-            // }
-          })
-          return context
+          }
         } catch (err) {
-          logger.error('USER AFTER FIND ERROR')
-          logger.error(err)
+          console.log('inventory item parsing error on user.FIND', err)
         }
+        return context
       }
+      // async (context: HookContext): Promise<HookContext> => {
+      //   try {
+      //     const { app, result } = context
+      //
+      //     result.data.forEach(async (item) => {
+      //       if (item.subscriptions && item.subscriptions.length > 0) {
+      //         await Promise.all(
+      //           item.subscriptions.map(async (subscription: any) => {
+      //             subscription.dataValues.subscriptionType = await context.app
+      //               .service('subscription-type')
+      //               .get(subscription.plan)
+      //           })
+      //         )
+      //       }
+      //
+      //       // const userAvatarResult = await app.service('static-resource').find({
+      //       //   query: {
+      //       //     staticResourceType: 'user-thumbnail',
+      //       //     userId: item.id
+      //       //   }
+      //       // });
+      //       //
+      //       // if (userAvatarResult.total > 0 && item.dataValues) {
+      //       //   item.dataValues.avatarUrl = userAvatarResult.data[0].url;
+      //       // }
+      //     })
+      //     return context
+      //   } catch (err) {
+      //     logger.error('USER AFTER FIND ERROR')
+      //     logger.error(err)
+      //   }
+      // }
     ],
     get: [
-      async (context: HookContext): Promise<HookContext> => {
+      (context: HookContext): HookContext => {
         try {
-          if (context.result.subscriptions && context.result.subscriptions.length > 0) {
-            await Promise.all(
-              context.result.subscriptions.map(async (subscription: any) => {
-                subscription.dataValues.subscriptionType = await context.app
-                  .service('subscription-type')
-                  .get(subscription.plan)
-              })
-            )
+          if (context.result) {
+            for (let i = 0; i < context.result.inventory_items?.length; i++) {
+              context.result.inventory_items[i].metadata = JSON.parse(context.result.inventory_items[i].metadata)
+            }
           }
-
-          // const { id, app, result } = context;
-          //
-          // const userAvatarResult = await app.service('static-resource').find({
-          //   query: {
-          //     staticResourceType: 'user-thumbnail',
-          //     userId: id
-          //   }
-          // });
-          // if (userAvatarResult.total > 0) {
-          //   result.dataValues.avatarUrl = userAvatarResult.data[0].url;
-          // }
-
-          return context
         } catch (err) {
-          logger.error('USER AFTER GET ERROR')
-          logger.error(err)
+          console.log('inventory item parsing error on user.GET', err)
         }
+        return context
       }
+      // async (context: HookContext): Promise<HookContext> => {
+      //   try {
+      //     if (context.result.subscriptions && context.result.subscriptions.length > 0) {
+      //       await Promise.all(
+      //         context.result.subscriptions.map(async (subscription: any) => {
+      //           subscription.dataValues.subscriptionType = await context.app
+      //             .service('subscription-type')
+      //             .get(subscription.plan)
+      //         })
+      //       )
+      //     }
+      //
+      //     // const { id, app, result } = context;
+      //     //
+      //     // const userAvatarResult = await app.service('static-resource').find({
+      //     //   query: {
+      //     //     staticResourceType: 'user-thumbnail',
+      //     //     userId: id
+      //     //   }
+      //     // });
+      //     // if (userAvatarResult.total > 0) {
+      //     //   result.dataValues.avatarUrl = userAvatarResult.data[0].url;
+      //     // }
+      //
+      //     return context
+      //   } catch (err) {
+      //     logger.error('USER AFTER GET ERROR')
+      //     logger.error(err)
+      //   }
+      // }
     ],
     create: [
       async (context: HookContext): Promise<HookContext> => {
@@ -194,18 +247,23 @@ export default {
           await context.app.service('user-settings').create({
             userId: context.result.id
           })
-          context.arguments[0]?.scopeType?.forEach((el) => {
+
+          context.arguments[0]?.scopes?.forEach((el) => {
             context.app.service('scope').create({
               type: el.type,
               userId: context.result.id
             })
           })
+
           const app = context.app
           let result = context.result
           if (Array.isArray(result)) result = result[0]
+          if (result?.userRole !== 'guest')
+            await context.app.service('user-api-key').create({
+              userId: context.result.id
+            })
           if (result?.userRole !== 'guest' && result?.inviteCode == null) {
             const code = await getFreeInviteCode(app)
-
             await app.service('user').patch(result.id, {
               inviteCode: code
             })
@@ -215,6 +273,7 @@ export default {
           logger.error('USER AFTER CREATE ERROR')
           logger.error(err)
         }
+        return null!
       }
     ],
     update: [],
@@ -224,7 +283,7 @@ export default {
           const app = context.app
           let result = context.result
           if (Array.isArray(result)) result = result[0]
-          if (result?.userRole !== 'guest' && result?.inviteCode == null) {
+          if (result && result.userRole !== 'guest' && result.inviteCode == null) {
             const code = await getFreeInviteCode(app)
             await app.service('user').patch(result.id, {
               inviteCode: code
@@ -249,4 +308,4 @@ export default {
     patch: [],
     remove: []
   }
-}
+} as any

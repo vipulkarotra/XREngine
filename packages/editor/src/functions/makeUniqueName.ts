@@ -1,4 +1,10 @@
+import { EntityTreeNode } from '@xrengine/engine/src/ecs/classes/EntityTree'
+import { getComponent } from '@xrengine/engine/src/ecs/functions/ComponentFunctions'
+import { useWorld } from '@xrengine/engine/src/ecs/functions/SystemHooks'
+import { NameComponent } from '@xrengine/engine/src/scene/components/NameComponent'
+
 const namePattern = new RegExp('(.*) \\d+$')
+
 function getNameWithoutIndex(name) {
   let cacheName = name
   const match = namePattern.exec(name)
@@ -7,24 +13,30 @@ function getNameWithoutIndex(name) {
   }
   return cacheName
 }
-export default function makeUniqueName(scene, object) {
-  const uniqueNames = new Set()
-  // Gather unique names
-  scene.traverse((child) => {
-    if (!child.isNode) return
-    uniqueNames.add(child.name)
-  })
-  // Rename all nodes in object that are not unique by incrementing and appending a number until it is unique.
-  object.traverse((child) => {
-    if (!child.isNode || !uniqueNames.has(child.name)) return
-    const nameWithoutIndex = getNameWithoutIndex(object.name)
-    let counter = 1
-    let curName = nameWithoutIndex + ' ' + counter
-    while (uniqueNames.has(curName)) {
-      counter++
-      curName = nameWithoutIndex + ' ' + counter
+
+export default function makeUniqueName(node: EntityTreeNode, world = useWorld()) {
+  let counter = 0
+
+  const nodeNameComp = getComponent(node.entity, NameComponent)
+  const nameWithoutIndex = getNameWithoutIndex(nodeNameComp.name)
+
+  world.entityTree.traverse((child) => {
+    if (child.entity === node.entity) return
+
+    const nameComponent = getComponent(child.entity, NameComponent)
+    if (!nameComponent.name.startsWith(nameWithoutIndex)) return
+
+    const parts = nameComponent.name.split(nameWithoutIndex)
+
+    if (parts[0]) return // if child's name starts with given object's name then first part will be empty string ('')
+
+    // Second part of the name will be empty string ('') for first child which name does not have '1' suffix
+    const num = parts[1] ? parseInt(parts[1]) : 1
+
+    if (num > counter) {
+      counter = num
     }
-    object.name = curName
-    uniqueNames.add(curName)
   })
+
+  nodeNameComp.name = nameWithoutIndex + (counter > 0 ? ' ' + (counter + 1) : '')
 }

@@ -1,95 +1,80 @@
 import { LifecycleValue } from '../../common/enums/LifecycleValue'
-import { NumericalType } from '../../common/types/NumericalTypes'
-import { getComponent } from '../../ecs/functions/EntityFunctions'
+import { defineQuery, getComponent } from '../../ecs/functions/ComponentFunctions'
 import { InputComponent } from '../components/InputComponent'
-import { LocalInputReceiverComponent } from '../components/LocalInputReceiverComponent'
+import { LocalInputTagComponent } from '../components/LocalInputTagComponent'
 import { InputType } from '../enums/InputType'
 import { InputValue } from '../interfaces/InputValue'
 import { InputAlias } from '../types/InputAlias'
 import { Engine } from '../../ecs/classes/Engine'
-import { processInput } from '../functions/processInput'
+import { World } from '../../ecs/classes/World'
 import { handleGamepads } from '../functions/GamepadInput'
-import { defineQuery, defineSystem, enterQuery, exitQuery, System } from 'bitecs'
-import { ECSWorld } from '../../ecs/classes/World'
+import { addClientInputListeners } from '../functions/clientInputListeners'
 
 export const enableInput = ({ keyboard, mouse }: { keyboard?: boolean; mouse?: boolean }) => {
   if (typeof keyboard !== 'undefined') Engine.keyboardInputEnabled = keyboard
   if (typeof mouse !== 'undefined') Engine.mouseInputEnabled = mouse
 }
 
-export const ClientInputSystem = async (): Promise<System> => {
-  const localClientInputQuery = defineQuery([InputComponent, LocalInputReceiverComponent])
-  const localClientInputAddQuery = enterQuery(localClientInputQuery)
-  const localClientInputRemoveQuery = exitQuery(localClientInputQuery)
+export default async function ClientInputSystem(world: World) {
+  const localClientInputQuery = defineQuery([InputComponent, LocalInputTagComponent])
 
-  return defineSystem((world: ECSWorld) => {
+  addClientInputListeners()
+
+  return () => {
     const { delta } = world
 
     if (!Engine.xrSession) {
       handleGamepads()
     }
 
-    Engine.inputState.forEach((value: InputValue<NumericalType>, key: InputAlias) => {
-      if (!Engine.prevInputState.has(key)) {
-        return
-      }
-
-      if (value.type === InputType.BUTTON) {
-        const prevValue = Engine.prevInputState.get(key)
-        // auto ENDED when event not continue
-        if (
-          (prevValue.lifecycleState === LifecycleValue.STARTED && value.lifecycleState === LifecycleValue.STARTED) ||
-          (prevValue.lifecycleState === LifecycleValue.CONTINUED && value.lifecycleState === LifecycleValue.STARTED)
-        ) {
-          // auto-switch to CONTINUED
-          value.lifecycleState = LifecycleValue.CONTINUED
+    // for continuous input, figure out if the current data and previous data is the same
+    Engine.inputState.forEach((value: InputValue, key: InputAlias) => {
+      if (Engine.prevInputState.has(key)) {
+        if (value.type === InputType.BUTTON) {
+          if (
+            value.lifecycleState === LifecycleValue.Started &&
+            Engine.prevInputState.get(key)?.lifecycleState === LifecycleValue.Started
+          ) {
+            value.lifecycleState = LifecycleValue.Continued
+          }
+        } else {
+          if (value.lifecycleState !== LifecycleValue.Ended) {
+            value.lifecycleState =
+              JSON.stringify(value.value) === JSON.stringify(Engine.prevInputState.get(key)?.value)
+                ? LifecycleValue.Unchanged
+                : LifecycleValue.Changed
+          }
         }
-        return
-      }
 
-      if (value.lifecycleState === LifecycleValue.ENDED) {
-        // ENDED here is a special case, like mouse position on mouse down
-        return
+        if (
+          Engine.prevInputState.get(key)?.lifecycleState === LifecycleValue.Ended &&
+          value.lifecycleState === LifecycleValue.Ended
+        ) {
+          Engine.inputState.delete(key)
+        }
       }
-
-      value.lifecycleState =
-        JSON.stringify(value.value) === JSON.stringify(Engine.prevInputState.get(key).value)
-          ? LifecycleValue.UNCHANGED
-          : LifecycleValue.CHANGED
     })
-
-    for (const entity of localClientInputQuery(world)) {
-      processInput(entity, delta)
-    }
 
     Engine.prevInputState.clear()
-    Engine.inputState.forEach((value: InputValue<NumericalType>, key: InputAlias) => {
+    Engine.inputState.forEach((value: InputValue, key: InputAlias) => {
       Engine.prevInputState.set(key, value)
-      if (value.lifecycleState === LifecycleValue.ENDED) {
-        Engine.inputState.delete(key)
-      }
     })
 
-    // Called when input component is added to entity
-    for (const entity of localClientInputAddQuery(world)) {
-      // Get component reference
-      const input = getComponent(entity, InputComponent)
-      for (const call of input.schema.onAdded) {
-        call(entity, delta)
-      }
-    }
+    // copy client input state to input component
+    for (const entity of localClientInputQuery(world)) {
+      const inputComponent = getComponent(entity, InputComponent)
+      inputComponent.data.clear()
+      Engine.inputState.forEach((value: InputValue, key: InputAlias) => {
+        if (inputComponent.schema.inputMap.has(key)) {
+          inputComponent.data.set(inputComponent.schema.inputMap.get(key)!, JSON.parse(JSON.stringify(value)))
+        }
+      })
 
-    // Called when input component is removed from entity
-    for (const entity of localClientInputRemoveQuery(world)) {
-      // Get component reference
-      const input = getComponent(entity, InputComponent, true)
-      for (const call of input.schema.onRemove) {
-        call(entity, delta)
-      }
-      input.prevData.clear()
-      input.data.clear()
+      inputComponent.data.forEach((value: InputValue, key: InputAlias) => {
+        if (inputComponent.schema.behaviorMap.has(key)) {
+          inputComponent.schema.behaviorMap.get(key)!(entity, key, value, delta)
+        }
+      })
     }
-
-    return world
-  })
+  }
 }

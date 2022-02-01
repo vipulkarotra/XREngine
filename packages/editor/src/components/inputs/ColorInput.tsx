@@ -1,10 +1,9 @@
 import React, { useCallback } from 'react'
-import PropTypes from 'prop-types'
 import SketchPicker from 'react-color/lib/Sketch'
 import Input from './Input'
 import { Color } from 'three'
 import styled from 'styled-components'
-import Popover from '../layout/Popover'
+import Popover from '@mui/material/Popover'
 
 /**
  * ColorInputContainer used to provide styles for ColorInputContainer div.
@@ -66,6 +65,13 @@ const ColorInputPopover = (styled as any).div`
   margin-bottom: 3px;
 `
 
+interface ColorInputProp {
+  value: any
+  onChange: Function
+  disabled?: boolean
+  isValueAsInteger?: boolean
+}
+
 /**
  * ColorInput used to render the view of component.
  *
@@ -77,7 +83,7 @@ const ColorInputPopover = (styled as any).div`
  * @constructor
  */
 
-export function ColorInput({ value, onChange, disabled, isValueAsInteger = false, ...rest }) {
+export function ColorInput({ value, onChange, disabled, isValueAsInteger = false, ...rest }: ColorInputProp) {
   const onChangePicker = useCallback(
     ({ hex }) => {
       onChange(isValueAsInteger ? new Color(hex).getHex() : new Color(hex))
@@ -85,50 +91,40 @@ export function ColorInput({ value, onChange, disabled, isValueAsInteger = false
     [onChange]
   )
 
+  const [anchorEl, setAnchorEl] = React.useState<HTMLElement | null>(null)
+
+  const handlePopoverOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget)
+  }
+
+  const handlePopoverClose = () => {
+    setAnchorEl(null)
+  }
+
+  const open = Boolean(anchorEl)
+
   //initializing hexColor by getting hexString
   const hexColor = '#' + (isValueAsInteger ? value.toString(16) : value.getHexString())
 
   //creating view for ColorInput
   return (
     <ColorInputContainer>
-      {/* @ts-ignore */}
-      <Popover
-        disabled={disabled}
-        renderContent={() => (
-          <ColorInputPopover>
-            <SketchPicker {...rest} color={hexColor} disableAlpha={true} onChange={onChangePicker} />
-          </ColorInputPopover>
-        )}
-      >
-        <StyledColorInput as="div" disabled={disabled}>
-          <ColorPreview style={{ background: hexColor }} />
-          <ColorText>{hexColor.toUpperCase()}</ColorText>
-        </StyledColorInput>
+      <StyledColorInput as="div" disabled={disabled} onClick={handlePopoverOpen}>
+        <ColorPreview style={{ background: hexColor }} />
+        <ColorText>{hexColor.toUpperCase()}</ColorText>
+      </StyledColorInput>
+      <Popover open={open && !disabled} anchorEl={anchorEl} onClose={handlePopoverClose}>
+        <ColorInputPopover>
+          <SketchPicker {...rest} color={hexColor} disableAlpha={true} onChange={onChangePicker} />
+        </ColorInputPopover>
       </Popover>
     </ColorInputContainer>
   )
 }
 
-/**
- * Declairing propTypes for ColorInput.
- *
- * @author Robert Long
- * @type {Object}
- */
-// ColorInput.propTypes = {
-//   disabled: PropTypes.bool,
-//   value: PropTypes.object.isRequired,
-//   onChange: PropTypes.func
-// };
-
-/**
- * Initializing defaultProps for ColorInput.
- *
- * @author Robert Long
- * @type {Object}
- */
 ColorInput.defaultProps = {
   value: new Color(),
   onChange: () => {}
 }
+
 export default ColorInput

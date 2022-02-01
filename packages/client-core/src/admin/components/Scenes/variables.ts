@@ -1,44 +1,44 @@
-export interface Column {
+export interface SceneColumn {
   id: 'name' | 'description' | 'type' | 'entity' | 'version' | 'action'
   label: string
   minWidth?: number
   align?: 'right'
 }
 
-export const columns: Column[] = [
-  { id: 'name', label: 'Name', minWidth: 150 },
-  { id: 'description', label: 'Description', minWidth: 100 },
+export const sceneColumns: SceneColumn[] = [
+  { id: 'name', label: 'Name', minWidth: 65 },
+  { id: 'description', label: 'Description', minWidth: 65 },
   {
     id: 'type',
     label: 'Type',
-    minWidth: 150,
+    minWidth: 65,
     align: 'right'
   },
   {
     id: 'entity',
     label: 'Entity',
-    minWidth: 150,
+    minWidth: 65,
     align: 'right'
   },
   {
     id: 'version',
     label: 'Version',
-    minWidth: 150,
+    minWidth: 65,
     align: 'right'
   },
   {
     id: 'action',
     label: 'Action',
-    minWidth: 150,
+    minWidth: 65,
     align: 'right'
   }
 ]
 
-export interface Data {
+export interface SceneData {
   id: string
-  name: string
-  description: string
-  type: string
+  name: string | JSX.Element
+  description: string | JSX.Element
+  type: string | JSX.Element
   entity: any
   version: any
   action: any
@@ -52,12 +52,12 @@ export interface EntityColumn {
 }
 
 export const entityColumns: EntityColumn[] = [
-  { id: 'name', label: 'Name', minWidth: 150 },
-  { id: 'index', label: 'Index', minWidth: 100 },
+  { id: 'name', label: 'Name', minWidth: 65 },
+  { id: 'index', label: 'Index', minWidth: 65 },
   {
     id: 'components',
     label: 'Components',
-    minWidth: 100,
+    minWidth: 65,
     align: 'right'
   }
 ]

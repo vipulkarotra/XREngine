@@ -1,6 +1,6 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import styled from 'styled-components'
+import { FileDataType } from './FileDataType'
 
 /**
  * TooltipContainer used as container tooltip.
@@ -10,7 +10,7 @@ import styled from 'styled-components'
  */
 const TooltipContainer = (styled as any).div`
   display: flex;
-  width: 600px;
+  maxWidth: 100px;
   padding: 12px 0;
 `
 
@@ -24,8 +24,6 @@ const TooltipThumbnailContainer = (styled as any).div`
   display: flex;
   justify-content: center;
   align-items: center;
-  width: 200px;
-  height: 200px;
 `
 
 /**
@@ -44,6 +42,10 @@ const TooltipContent = (styled as any).div`
   }
 `
 
+interface AssetTooltipProps {
+  item: FileDataType
+}
+
 /**
  * AssetTooltip used to show tooltip on elements available in asset penal.
  *
@@ -51,23 +53,24 @@ const TooltipContent = (styled as any).div`
  * @param       {any} item
  * @constructor
  */
-export function AssetTooltip({ item }) {
-  let thumbnail
+export const AssetTooltip = (props: AssetTooltipProps) => {
+  const { item } = props
+
+  const thumbnail = <img src={item.url} />
 
   // check if item contains thumbnailUrl then initializing thumbnail
   // else creating thumbnail if there is videoUrl
   // then check if item contains iconComponent then initializing using IconComponent
   //else initialize thumbnail using src from item object
-  if (item.thumbnailUrl) {
-    thumbnail = <img src={item.thumbnailUrl} />
-  } else if (item.videoUrl) {
-    thumbnail = <video src={item.videoUrl} autoPlay muted />
-  } else if (item.iconComponent) {
-    const IconComponent = item.iconComponent
-    thumbnail = <IconComponent size={100} />
-  } else {
-    thumbnail = <img src={item.src} />
-  }
+  // if (item.thumbnailUrl) {
+  //   thumbnail = <img src={item.thumbnailUrl} />
+  // } else if (item.videoUrl) {
+  //   thumbnail = <video src={item.videoUrl} autoPlay muted />
+  // } else if (item.iconComponent) {
+  //   const IconComponent = item.iconComponent
+  //   thumbnail = <IconComponent size={50} />
+  // } else {
+  // }
 
   //creating tooltip view
   return (
@@ -81,7 +84,4 @@ export function AssetTooltip({ item }) {
   )
 }
 
-AssetTooltip.propTypes = {
-  item: PropTypes.object
-}
 export default AssetTooltip

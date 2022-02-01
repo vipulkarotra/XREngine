@@ -1,16 +1,13 @@
-import collectAnalytics from '@xrengine/server-core/src/hooks/collect-analytics'
 import groupPermissionAuthenticate from '@xrengine/server-core/src/hooks/group-permission-authenticate'
 import createGroupOwner from '@xrengine/server-core/src/hooks/create-group-owner'
 import removeGroupUsers from '@xrengine/server-core/src/hooks/remove-group-users'
-import * as authentication from '@feathersjs/authentication'
+import authenticate from '../../hooks/authenticate'
 import { HookContext } from '@feathersjs/feathers'
 import logger from '../../logger'
 
-const { authenticate } = authentication.hooks
-
 export default {
   before: {
-    all: [authenticate('jwt'), collectAnalytics()],
+    all: [authenticate()],
     find: [],
     get: [],
     create: [],
@@ -18,13 +15,13 @@ export default {
     patch: [
       groupPermissionAuthenticate(),
       async (context: HookContext): Promise<HookContext> => {
-        const foundItem = await context.app.service('scope').Model.findAll({
+        const foundItem = await (context.app.service('scope') as any).Model.findAll({
           where: {
             groupId: context.arguments[0]
           }
         })
         if (!foundItem.length) {
-          context.arguments[1]?.scopeType?.forEach(async (el) => {
+          context.arguments[1]?.scopeTypes?.forEach(async (el) => {
             await context.app.service('scope').create({
               type: el.type,
               groupId: context.arguments[0]
@@ -34,7 +31,7 @@ export default {
           foundItem.forEach(async (scp) => {
             await context.app.service('scope').remove(scp.dataValues.id)
           })
-          context.arguments[1]?.scopeType?.forEach(async (el) => {
+          context.arguments[1]?.scopeTypes?.forEach(async (el) => {
             await context.app.service('scope').create({
               type: el.type,
               groupId: context.arguments[0]
@@ -55,7 +52,7 @@ export default {
       createGroupOwner(),
       async (context: HookContext): Promise<HookContext> => {
         try {
-          context.arguments[0]?.scopeType?.forEach(async (el) => {
+          context.arguments[0]?.scopeTypes?.forEach(async (el) => {
             await context.app.service('scope').create({
               type: el.type,
               groupId: context.result.id
@@ -65,6 +62,7 @@ export default {
         } catch (error) {
           logger.error('GROUP AFTER CREATE ERROR')
           logger.error(error)
+          return null!
         }
       }
     ],
@@ -82,4 +80,4 @@ export default {
     patch: [],
     remove: []
   }
-}
+} as any

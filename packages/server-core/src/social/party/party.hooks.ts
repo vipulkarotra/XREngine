@@ -1,26 +1,40 @@
-import * as authentication from '@feathersjs/authentication'
-import { disallow } from 'feathers-hooks-common'
+import authenticate from '../../hooks/authenticate'
+import { disallow, iff, isProvider } from 'feathers-hooks-common'
 import partyPermissionAuthenticate from '@xrengine/server-core/src/hooks/party-permission-authenticate'
 import createPartyOwner from '@xrengine/server-core/src/hooks/create-party-owner'
 import removePartyUsers from '@xrengine/server-core/src/hooks/remove-party-users'
-import collectAnalytics from '@xrengine/server-core/src/hooks/collect-analytics'
 import { HookContext } from '@feathersjs/feathers'
 import { extractLoggedInUserFromParams } from '../../user/auth-management/auth-management.utils'
+import addAssociations from '../../hooks/add-associations'
+import restrictUserRole from '../../hooks/restrict-user-role'
 // Don't remove this comment. It's needed to format import lines nicely.
-
-const { authenticate } = authentication.hooks
 
 export default {
   before: {
-    all: [authenticate('jwt'), collectAnalytics()],
-    find: [],
+    all: [authenticate()],
+    find: [
+      iff(isProvider('external'), restrictUserRole('admin') as any),
+      addAssociations({
+        models: [
+          {
+            model: 'location'
+          },
+          {
+            model: 'instance'
+          },
+          {
+            model: 'party-user'
+          }
+        ]
+      })
+    ],
     get: [],
     create: [
       async (context): Promise<HookContext> => {
         const loggedInUser = extractLoggedInUserFromParams(context.params)
         const currentPartyUser = await context.app.service('party-user').find({
           query: {
-            userId: loggedInUser.userId
+            userId: loggedInUser.id
           }
         })
         if (currentPartyUser.total > 0) {
@@ -29,7 +43,7 @@ export default {
           } catch (error) {
             console.error(error)
           }
-          await context.app.service('user').patch(loggedInUser.userId, {
+          await context.app.service('user').patch(loggedInUser.id, {
             partyId: null
           })
         }
@@ -37,7 +51,7 @@ export default {
       }
     ],
     update: [disallow()],
-    patch: [],
+    patch: [iff(isProvider('external'), partyPermissionAuthenticate() as any)],
     // TODO: Need to ask if we allow user to remove party or not
     remove: [partyPermissionAuthenticate(), removePartyUsers()]
   },
@@ -61,4 +75,4 @@ export default {
     patch: [],
     remove: []
   }
-}
+} as any

@@ -1,12 +1,12 @@
 import { FileLoader, MeshPhysicalMaterial, Object3D, LOD, TextureLoader } from 'three'
-import { getLoader as getGLTFLoader, loadExtentions } from '../functions/LoadGLTF'
+import { getLoader as getGLTFLoader, loadExtensions } from '../functions/LoadGLTF'
 import { FBXLoader } from '../loaders/fbx/FBXLoader'
 import { AssetType } from '../enum/AssetType'
 import { AssetClass } from '../enum/AssetClass'
-import { Entity } from '../../ecs/classes/Entity'
 import { isAbsolutePath } from '../../common/functions/isAbsolutePath'
 import { Engine } from '../../ecs/classes/Engine'
 import { LODS_REGEXP, DEFAULT_LOD_DISTANCES } from '../constants/LoaderConstants'
+// import { instanceGLTF } from '../functions/transformGLTF'
 
 export const processModelAsset = (asset: any, params: AssetLoaderParamType): void => {
   const replacedMaterials = new Map()
@@ -67,13 +67,13 @@ export const handleLODs = (asset: Object3D): Object3D => {
       LODs.set(name, [])
     }
 
-    LODs.get(name).push({ object: child, level })
+    LODs.get(name)?.push({ object: child, level })
   })
 
   LODs.forEach((value, key) => {
     const lod = new LOD()
     lod.name = key
-    value[0].object.parent.add(lod)
+    value[0].object.parent?.add(lod)
 
     value.forEach(({ level, object }) => {
       lod.addLevel(object, AssetLoader.LOD_DISTANCES[level])
@@ -94,7 +94,7 @@ export const getAssetType = (assetFileName: string): AssetType => {
   else if (/\.(?:vrm)$/.test(assetFileName)) return AssetType.VRM
   else if (/\.(?:png)$/.test(assetFileName)) return AssetType.PNG
   else if (/\.(?:jpg|jpeg|)$/.test(assetFileName)) return AssetType.JPEG
-  else return null
+  return null!
 }
 
 /**
@@ -108,7 +108,7 @@ export const getAssetClass = (assetFileName: string): AssetClass => {
   } else if (/\.png|jpg|jpeg$/.test(assetFileName)) {
     return AssetClass.Image
   } else {
-    return null
+    return null!
   }
 }
 
@@ -133,50 +133,60 @@ const getLoader = (assetType: AssetType) => {
 
 type AssetLoaderParamType = {
   url: string
+  cache?: boolean
   castShadow?: boolean
   receiveShadow?: boolean
+  instanced?: boolean
   [key: string]: any
 }
 
-const load = (
+const assetLoadCallback =
+  (url: string, assetType: AssetType, params, onLoad: (response: any) => void) => async (asset) => {
+    if (assetType === AssetType.glTF || assetType === AssetType.VRM) {
+      await loadExtensions(asset)
+    }
+
+    const assetClass = getAssetClass(url)
+    if (assetClass === AssetClass.Model) {
+      processModelAsset(asset.scene, params)
+    }
+
+    params.cache && AssetLoader.Cache.set(url, asset)
+
+    onLoad(asset)
+  }
+
+const load = async (
   params: AssetLoaderParamType,
-  onLoad?: (response: any) => void,
-  onProgress?: (request: ProgressEvent) => void,
-  onError?: (event: ErrorEvent | Error) => void
+  onLoad: (response: any) => void,
+  onProgress: (request: ProgressEvent) => void,
+  onError: (event: ErrorEvent | Error) => void
 ) => {
+  params.cache = typeof params.cache === 'undefined' || params.cache
   if (!params.url) {
     onError(new Error('URL is empty'))
     return
   }
   const url = isAbsolutePath(params.url) ? params.url : Engine.publicPath + params.url
 
-  if (AssetLoader.Cache.has(url)) {
+  if (params.cache && AssetLoader.Cache.has(url)) {
     onLoad(AssetLoader.Cache.get(url))
   }
 
   const assetType = getAssetType(url)
-  const assetClass = getAssetClass(url)
-
   const loader = getLoader(assetType)
+  const callback = assetLoadCallback(url, assetType, params, onLoad)
 
-  loader.load(
-    url,
-    (asset) => {
-      if (assetType === AssetType.glTF || assetType === AssetType.VRM) {
-        loadExtentions(asset)
-      }
-
-      if (assetClass === AssetClass.Model) {
-        processModelAsset(asset.scene, params)
-      }
-
-      AssetLoader.Cache.set(url, asset)
-
-      onLoad(asset)
-    },
-    onProgress,
-    onError
-  )
+  try {
+    // TODO: fix instancing for GLTFs
+    // if (params.instanced) {
+    //   ;(loader as GLTFLoader).parse(await instanceGLTF(url), null!, callback, onError)
+    // } else {
+    loader.load(url, callback, onProgress, onError)
+    // }
+  } catch (error) {
+    onError(error)
+  }
 }
 
 export class AssetLoader {
@@ -190,9 +200,9 @@ export class AssetLoader {
 
   static load(
     params: AssetLoaderParamType,
-    onLoad?: (response: any) => void,
-    onProgress?: (request: ProgressEvent) => void,
-    onError?: (event: ErrorEvent | Error) => void
+    onLoad = (response: any) => {},
+    onProgress = (request: ProgressEvent) => {},
+    onError = (event: ErrorEvent | Error) => {}
   ) {
     load(params, onLoad, onProgress, onError)
   }

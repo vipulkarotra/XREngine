@@ -1,119 +1,91 @@
+import MuiAlert from '@mui/material/Alert'
+import Button from '@mui/material/Button'
+import Container from '@mui/material/Container'
+import DialogActions from '@mui/material/DialogActions'
+import DialogContentText from '@mui/material/DialogContentText'
+import DialogTitle from '@mui/material/DialogTitle'
+import Drawer from '@mui/material/Drawer'
+import FormControl from '@mui/material/FormControl'
+import InputBase from '@mui/material/InputBase'
+import MenuItem from '@mui/material/MenuItem'
+import Paper from '@mui/material/Paper'
+import Select from '@mui/material/Select'
+import Snackbar from '@mui/material/Snackbar'
+import { AdminScopeType } from '@xrengine/common/src/interfaces/AdminScopeType'
 import React from 'react'
-import Drawer from '@material-ui/core/Drawer'
-import Button from '@material-ui/core/Button'
-import { createUser as createUserAction, fetchStaticResource } from '../../reducers/admin/user/service'
-import { bindActionCreators, Dispatch } from 'redux'
-import { connect } from 'react-redux'
-import { fetchUserRole } from '../../reducers/admin/user/service'
-import { selectAdminState } from '../../reducers/admin/selector'
-import DialogContentText from '@material-ui/core/DialogContentText'
+import { useAlertState } from '../../../common/services/AlertService'
+import { useAuthState } from '../../../user/services/AuthService'
+import { ScopeTypeService, useScopeTypeState } from '../../services/ScopeTypeService'
+import { staticResourceService, useStaticResourceState } from '../../services/StaticResourceService'
+import { UserRoleService, useUserRoleState } from '../../services/UserRoleService'
+import { UserService } from '../../services/UserService'
+import { useStyles } from '../../styles/ui'
 import CreateUserRole from './CreateUserRole'
-import DialogActions from '@material-ui/core/DialogActions'
-import Container from '@material-ui/core/Container'
-import DialogTitle from '@material-ui/core/DialogTitle'
-import { formValid } from './validation'
-import { selectAuthState } from '../../../user/reducers/auth/selector'
-import Snackbar from '@material-ui/core/Snackbar'
-import MuiAlert from '@material-ui/lab/Alert'
-import { useStyles, useStyle } from './styles'
-import { selectAdminUserState } from '../../reducers/admin/user/selector'
-import Paper from '@material-ui/core/Paper'
-import InputBase from '@material-ui/core/InputBase'
-import MenuItem from '@material-ui/core/MenuItem'
-import FormControl from '@material-ui/core/FormControl'
-import Select from '@material-ui/core/Select'
-import Autocomplete from '@material-ui/lab/Autocomplete'
-import TextField from '@material-ui/core/TextField'
-import { getScopeTypeService } from '../../reducers/admin/scope/service'
-import { selectScopeState } from '../../reducers/admin/scope/selector'
-
-const Alert = (props) => {
-  return <MuiAlert elevation={6} variant="filled" {...props} />
-}
+import { validateUserForm } from './validation'
+import AutoComplete from '../../common/AutoComplete'
+import AlertMessage from '../../common/AlertMessage'
 
 interface Props {
   open: boolean
   handleClose: any
-  adminState?: any
-  createUserAction?: any
-  authState?: any
-  patchUser?: any
-  fetchUserRole?: any
   closeViewModel: any
-  adminUserState?: any
-  fetchStaticResource?: any
-  getScopeTypeService?: any
-  adminScopeState?: any
 }
-const mapStateToProps = (state: any): any => {
-  return {
-    adminState: selectAdminState(state),
-    authState: selectAuthState(state),
-    adminUserState: selectAdminUserState(state),
-    adminScopeState: selectScopeState(state)
-  }
-}
-
-const mapDispatchToProps = (dispatch: Dispatch): any => ({
-  createUserAction: bindActionCreators(createUserAction, dispatch),
-  fetchUserRole: bindActionCreators(fetchUserRole, dispatch),
-  fetchStaticResource: bindActionCreators(fetchStaticResource, dispatch),
-  getScopeTypeService: bindActionCreators(getScopeTypeService, dispatch)
-})
 
 const CreateUser = (props: Props) => {
-  const {
-    open,
-    handleClose,
-    closeViewModel,
-    authState,
-    fetchUserRole,
-    adminUserState,
-    fetchStaticResource,
-    createUserAction,
-    getScopeTypeService,
-    adminScopeState
-  } = props
+  const { open, handleClose, closeViewModel } = props
 
   const classes = useStyles()
-  const classesx = useStyle()
   const [openCreateaUserRole, setOpenCreateUserRole] = React.useState(false)
   const [state, setState] = React.useState({
     name: '',
     avatar: '',
     userRole: '',
-    scopeType: [],
+    scopes: [] as Array<AdminScopeType>,
     formErrors: {
       name: '',
       avatar: '',
       userRole: '',
-      scopeType: ''
+      scopes: ''
     }
   })
 
   const [openWarning, setOpenWarning] = React.useState(false)
   const [error, setError] = React.useState('')
 
-  const user = authState.get('user')
-  const userRole = adminUserState.get('userRole')
-  const userRoleData = userRole ? userRole.get('userRole') : []
-  const staticResource = adminUserState.get('staticResource')
-  const staticResourceData = staticResource.get('staticResource')
-  const adminScopes = adminScopeState.get('scopeType').get('scopeType')
+  const user = useAuthState().user
+  const userRole = useUserRoleState()
+  const userRoleData = userRole ? userRole.userRole?.value : []
+  const staticResource = useStaticResourceState()
+  const staticResourceData = staticResource.staticResource
+
+  const adminScopeTypeState = useScopeTypeState()
+  const alertState = useAlertState()
+  const errorType = alertState.type
+  const errorMessage = alertState.message
+
+  React.useEffect(() => {
+    if (errorType.value === 'error') {
+      setError(errorMessage.value)
+      setOpenWarning(true)
+      setTimeout(() => {
+        setOpenWarning(false)
+      }, 5000)
+    }
+  }, [errorType.value, errorMessage.value])
 
   React.useEffect(() => {
     const fetchData = async () => {
-      await fetchUserRole()
+      await UserRoleService.fetchUserRole()
     }
-    const role = userRole ? userRole.get('updateNeeded') : false
-    if (role === true && user.id) fetchData()
-    if (user.id && staticResource.get('updateNeeded')) {
-      fetchStaticResource()
+    const role = userRole ? userRole.updateNeeded.value : false
+    if (role === true && user.id.value) fetchData()
+    if (user.id.value && staticResource.updateNeeded.value) {
+      staticResourceService.fetchStaticResource()
     }
-    if (adminScopeState.get('scopeType').get('updateNeeded') && user.id) {
-      getScopeTypeService()
+    if (adminScopeTypeState.updateNeeded.value && user.id.value) {
+      ScopeTypeService.getScopeTypeService()
     }
-  }, [adminUserState, user])
+  }, [adminScopeTypeState.updateNeeded.value, userRole.updateNeeded.value, staticResource.updateNeeded.value, user])
 
   const createUserRole = () => {
     setOpenCreateUserRole(true)
@@ -123,11 +95,14 @@ const CreateUser = (props: Props) => {
     setOpenCreateUserRole(false)
   }
 
-  const handleCloseWarning = (event, reason) => {
+  const handleCloseWarning = (event?: React.SyntheticEvent | Event, reason?: string) => {
     if (reason === 'clickaway') {
       return
     }
     setOpenWarning(false)
+  }
+  const handleChangeScopeType = (scope) => {
+    if (scope.length) setState({ ...state, scopes: scope, formErrors: { ...state.formErrors, scopes: '' } })
   }
 
   const handleChange = (e) => {
@@ -155,7 +130,7 @@ const CreateUser = (props: Props) => {
       name: state.name,
       avatarId: state.avatar,
       userRole: state.userRole,
-      scopeType: state.scopeType
+      scopes: state.scopes
     }
     let temp = state.formErrors
     if (!state.name) {
@@ -167,19 +142,19 @@ const CreateUser = (props: Props) => {
     if (!state.userRole) {
       temp.userRole = "User role can't be empty"
     }
-    if (!state.scopeType.length) {
-      temp.scopeType = "Scope type can't be empty"
+    if (!state.scopes.length) {
+      temp.scopes = "Scope type can't be empty"
     }
     setState({ ...state, formErrors: temp })
-    if (formValid(state, state.formErrors)) {
-      createUserAction(data)
+    if (validateUserForm(state, state.formErrors)) {
+      UserService.createUser(data)
       closeViewModel(false)
       setState({
         ...state,
         name: '',
         avatar: '',
         userRole: '',
-        scopeType: []
+        scopes: []
       })
     } else {
       setError('Please fill all required field')
@@ -187,9 +162,31 @@ const CreateUser = (props: Props) => {
     }
   }
 
+  const handleCancel = () => {
+    setState({
+      ...state,
+      name: '',
+      avatar: '',
+      userRole: '',
+      scopes: []
+    })
+    closeViewModel(false)
+  }
+
+  interface ScopeData {
+    type: string
+  }
+
+  const scopeData: ScopeData[] = []
+  adminScopeTypeState.scopeTypes.value.forEach((el) => {
+    scopeData.push({
+      type: el.type
+    })
+  })
+
   return (
     <React.Fragment>
-      <Drawer classes={{ paper: classesx.paper }} anchor="right" open={open} onClose={handleClose(false)}>
+      <Drawer classes={{ paper: classes.paperDrawer }} anchor="right" open={open} onClose={handleClose(false)}>
         <Container maxWidth="sm" className={classes.marginTp}>
           <DialogTitle id="form-dialog-title" className={classes.texAlign}>
             Create New User
@@ -221,12 +218,12 @@ const CreateUser = (props: Props) => {
                 onChange={handleChange}
                 className={classes.select}
                 name="avatar"
-                MenuProps={{ classes: { paper: classesx.selectPaper } }}
+                MenuProps={{ classes: { paper: classes.selectPaper } }}
               >
                 <MenuItem value="" disabled>
                   <em>Select avatar</em>
                 </MenuItem>
-                {staticResourceData.map((el) => (
+                {staticResourceData.value.map((el) => (
                   <MenuItem value={el.name} key={el.id}>
                     {el.name}
                   </MenuItem>
@@ -249,74 +246,40 @@ const CreateUser = (props: Props) => {
                 onChange={handleChange}
                 className={classes.select}
                 name="userRole"
-                MenuProps={{ classes: { paper: classesx.selectPaper } }}
+                MenuProps={{ classes: { paper: classes.selectPaper } }}
               >
                 <MenuItem value="" disabled>
                   <em>Select user role</em>
                 </MenuItem>
                 {userRoleData.map((el) => (
-                  <MenuItem value={el.role} key={el.role}>
-                    {el.role}
+                  <MenuItem value={el?.role} key={el?.role}>
+                    {el?.role}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
           </Paper>
           <DialogContentText className={classes.marginBottm}>
-            {' '}
             <span className={classes.select}>Don't see user role? </span>{' '}
             <a href="#h" className={classes.textLink} onClick={createUserRole}>
               Create One
-            </a>{' '}
+            </a>
           </DialogContentText>
-
-          <label>Grant Scope</label>
-          <Paper
-            component="div"
-            className={state.formErrors.scopeType.length > 0 ? classes.redBorder : classes.createInput}
-          >
-            <Autocomplete
-              onChange={(event, value) =>
-                setState({ ...state, scopeType: value, formErrors: { ...state.formErrors, scopeType: '' } })
-              }
-              multiple
-              className={classes.selector}
-              classes={{ paper: classesx.selectPaper, inputRoot: classes.select }}
-              id="tags-standard"
-              options={adminScopes}
-              disableCloseOnSelect
-              filterOptions={(options) =>
-                options.filter((option) => state.scopeType.find((scopeType) => scopeType.type === option.type) == null)
-              }
-              getOptionLabel={(option) => option.type}
-              renderInput={(params) => <TextField {...params} placeholder="Select scope" />}
-            />
-          </Paper>
-
+          <AutoComplete data={scopeData} label="Grant Scope" handleChangeScopeType={handleChangeScopeType} />
           <DialogActions>
-            <Button className={classesx.saveBtn} onClick={handleSubmit}>
+            <Button className={classes.saveBtn} onClick={handleSubmit}>
               Submit
             </Button>
-            <Button onClick={handleClose(false)} className={classesx.saveBtn}>
+            <Button onClick={handleCancel} className={classes.saveBtn}>
               Cancel
             </Button>
           </DialogActions>
-          <Snackbar
-            open={openWarning}
-            autoHideDuration={6000}
-            onClose={handleClose}
-            anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-          >
-            <Alert onClose={handleCloseWarning} severity="warning">
-              {' '}
-              {error}{' '}
-            </Alert>
-          </Snackbar>
         </Container>
       </Drawer>
       <CreateUserRole open={openCreateaUserRole} handleClose={handleUserRoleClose} />
+      <AlertMessage open={openWarning} handleClose={handleCloseWarning} severity="warning" message={error} />
     </React.Fragment>
   )
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(CreateUser)
+export default CreateUser

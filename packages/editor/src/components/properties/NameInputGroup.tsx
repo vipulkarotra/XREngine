@@ -1,9 +1,14 @@
-import React, { Component } from 'react'
-import PropTypes from 'prop-types'
+import React, { useState, useEffect } from 'react'
 import InputGroup from '../inputs/InputGroup'
 import StringInput from '../inputs/StringInput'
 import styled from 'styled-components'
-import { withTranslation } from 'react-i18next'
+import { useTranslation } from 'react-i18next'
+import { CommandManager } from '../../managers/CommandManager'
+import { EntityTreeNode } from '@xrengine/engine/src/ecs/classes/EntityTree'
+import { getComponent } from '@xrengine/engine/src/ecs/functions/ComponentFunctions'
+import { NameComponent } from '@xrengine/engine/src/scene/components/NameComponent'
+import EditorEvents from '../../constants/EditorEvents'
+import { EditorComponentType } from './Util'
 
 /**
  * Creating styled component using InputGroup component.
@@ -14,15 +19,8 @@ import { withTranslation } from 'react-i18next'
 const StyledNameInputGroup = (styled as any)(InputGroup)`
   label {
     width: auto !important;
-    padding-right: 8px;
   }
 `
-
-type Types = {
-  editor: any
-  node: any
-  t: Function
-}
 
 /**
  * NameInputGroup is used to render input group PropertiesPanelContainer.
@@ -30,79 +28,63 @@ type Types = {
  * @author Robert Long
  * @type {class component}
  */
-export class NameInputGroup extends Component<Types> {
-  //declaring propTypes for NameInputGroup
-  static propTypes = {
-    editor: PropTypes.object.isRequired,
-    node: PropTypes.object.isRequired
-  }
+export const NameInputGroup: EditorComponentType = (props) => {
+  const nodeName = getComponent(props.node.entity, NameComponent)?.name
 
-  // updating state and properties
-  constructor(props) {
-    super(props)
+  const [name, setName] = useState(nodeName)
+  const [focusedNode, setFocusedNode] = useState<EntityTreeNode>()
+  const { t } = useTranslation()
 
-    this.state = {
-      name: ((this.props as any).node as any).name,
-      focusedNode: null
+  useEffect(() => {
+    CommandManager.instance.addListener(EditorEvents.OBJECTS_CHANGED.toString(), onObjectChange)
+    return () => {
+      CommandManager.instance.removeListener(EditorEvents.OBJECTS_CHANGED.toString(), onObjectChange)
     }
+  }, [])
 
-    this.t = this.props.t
+  const onObjectChange = (_: any, propertyName: string) => {
+    if (propertyName === 'name') setName(getComponent(props.node.entity, NameComponent).name)
   }
-
-  t: Function
 
   //function to handle change in name property
-  onUpdateName = (name) => {
-    this.setState({ name })
-  }
+  const onUpdateName = (name) => setName(name)
 
   //function called when element get focused
-  //Updating state of component
-  onFocus = () => {
-    this.setState({
-      focusedNode: (this.props as any).node,
-      name: ((this.props as any).node as any).name
-    })
+  const onFocus = () => {
+    setFocusedNode(props.node)
+    setName(nodeName)
   }
 
-  //function to handle onBlur event on name property
-  onBlurName = () => {
+  // function to handle onBlur event on name property
+  const onBlurName = () => {
     // Check that the focused node is current node before setting the property.
     // This can happen when clicking on another node in the HierarchyPanel
-    if (
-      ((this.props as any).node as any).name !== (this.state as any).name &&
-      (this.props as any).node === (this.state as any).focusedNode
-    ) {
-      ;((this.props as any).editor as any).setPropertySelected('name', (this.state as any).name)
+    if (nodeName !== name && props?.node === focusedNode) {
+      CommandManager.instance.setPropertyOnSelectionEntities({
+        component: NameComponent,
+        properties: { name }
+      })
     }
 
-    this.setState({ focusedNode: null })
+    setFocusedNode(undefined)
   }
 
   //function to handle keyUp event on name property
-  onKeyUpName = (e) => {
+  const onKeyUpName = (e) => {
     if (e.key === 'Enter') {
       e.preventDefault()
-      ;((this.props as any).editor as any).setPropertySelected('name', (this.state as any).name)
+      CommandManager.instance.setPropertyOnSelectionEntities({
+        component: NameComponent,
+        properties: { name }
+      })
     }
   }
 
-  //rendering view NameInputGroup component
-  render() {
-    const name = (this.state as any).focusedNode ? (this.state as any).name : ((this.props as any).node as any).name
-    return (
-      <StyledNameInputGroup name="Name" label={this.t('editor:properties.name.lbl-name')}>
-        <StringInput
-          /* @ts-ignore */
-          value={name}
-          onChange={this.onUpdateName}
-          onFocus={this.onFocus}
-          onBlur={this.onBlurName}
-          onKeyUp={this.onKeyUpName}
-        />
-      </StyledNameInputGroup>
-    )
-  }
+  return (
+    <StyledNameInputGroup name="Name" label={t('editor:properties.name.lbl-name')}>
+      <StringInput value={name} onChange={onUpdateName} onFocus={onFocus} onBlur={onBlurName} onKeyUp={onKeyUpName} />
+    </StyledNameInputGroup>
+  )
 }
 
-export default withTranslation()(NameInputGroup)
+export default NameInputGroup

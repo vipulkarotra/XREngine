@@ -1,6 +1,6 @@
 import { AnimationClip, MathUtils } from 'three'
 import { Entity } from '../../ecs/classes/Entity'
-import { getComponent } from '../../ecs/functions/EntityFunctions'
+import { getComponent } from '../../ecs/functions/ComponentFunctions'
 import { AnimationManager } from '../AnimationManager'
 import { AnimationComponent } from '../components/AnimationComponent'
 import { AvatarAnimationComponent } from '../components/AvatarAnimationComponent'
@@ -207,7 +207,7 @@ export class AnimationRenderer {
     })
 
     if (emptyPrevState) {
-      avatarAnimationComponent.prevState = null
+      avatarAnimationComponent.prevState = null!
     }
   }
 }

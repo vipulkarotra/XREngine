@@ -1,27 +1,21 @@
-import { DoorOpen } from '@styled-icons/fa-solid'
-import { Config } from '@xrengine/common/src/config'
-import CubemapBakeNode from '@xrengine/editor/src/nodes/CubemapBakeNode'
-import type PortalNode from '@xrengine/editor/src/nodes/PortalNode'
-import { fetchUrl } from '@xrengine/engine/src/scene/functions/fetchUrl'
-import i18n from 'i18next'
-import React, { Component } from 'react'
-import { withTranslation } from 'react-i18next'
-import { Object3D } from 'three'
-import Editor from '../Editor'
+import React, { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import EulerInput from '../inputs/EulerInput'
 import InputGroup from '../inputs/InputGroup'
 import SelectInput from '../inputs/SelectInput'
-import { ControlledStringInput } from '../inputs/StringInput'
+import StringInput from '../inputs/StringInput'
 import Vector3Input from '../inputs/Vector3Input'
 import NodeEditor from './NodeEditor'
+import { CommandManager } from '../../managers/CommandManager'
+import { client } from '@xrengine/client-core/src/feathers'
+import MeetingRoomIcon from '@mui/icons-material/MeetingRoom'
+import { PortalDetail } from '@xrengine/common/src/interfaces/PortalInterface'
+import { PortalComponent } from '@xrengine/engine/src/scene/components/PortalComponent'
+import { EditorComponentType, updateProperty } from './Util'
+import { getComponent } from '@xrengine/engine/src/ecs/functions/ComponentFunctions'
+import { Euler } from 'three'
 
-type PortalNodeEditorProps = {
-  editor?: Editor
-  node?: object
-  t: Function
-}
-
-type PortalDetail = {
+type PortalOptions = {
   name: string
   value: string
 }
@@ -29,13 +23,10 @@ type PortalDetail = {
 type PortalFilterOption = {
   label: string
   value: string
-  data: PortalDetail
+  data: PortalOptions
 }
 
-type PortalNodeEditorStates = {
-  portals: PortalDetail[]
-  entityId: string
-}
+const euler = new Euler()
 
 /**
  * PortalNodeEditor provides the editor for properties of PortalNode.
@@ -43,170 +34,98 @@ type PortalNodeEditorStates = {
  * @author Josh Field <github.com/HexaField>
  * @type {class component}
  */
-export class PortalNodeEditor extends Component<PortalNodeEditorProps, PortalNodeEditorStates> {
-  // initializing iconComponent image name
-  static iconComponent = DoorOpen
+export const PortalNodeEditor: EditorComponentType = (props) => {
+  const [portals, setPortals] = useState<Array<{ value: string; label: string }>>([])
+  const [entityId, setEntityId] = useState('')
+  const { t } = useTranslation()
 
-  //initializing description and will appears on PortalNodeEditor view
-  static description = i18n.t('editor:properties.portal.description')
-
-  constructor(props) {
-    super(props)
-
-    this.state = {
-      portals: [],
-      entityId: ''
-    }
-  }
-
-  onChangeLocationName = (locationName) => {
-    this.props.editor.setPropertySelected('locationName', locationName)
-  }
-
-  onChangeLinkedPortalId = (linkedPortalId) => {
-    this.props.editor.setPropertySelected('linkedPortalId', linkedPortalId)
-  }
-
-  onChangeModelUrl = (modelUrl) => {
-    this.props.editor.setPropertySelected('modelUrl', modelUrl)
-  }
-
-  onChangeDisplayText = (displayText) => {
-    this.props.editor.setPropertySelected('displayText', displayText)
-  }
-
-  onChangeSpawnPosition = (spawnPosition) => {
-    this.props.editor.setPropertySelected('spawnPosition', spawnPosition)
-  }
-
-  onChangeSpawnRotation = (spawnRotation) => {
-    this.props.editor.setPropertySelected('spawnRotation', spawnRotation)
-  }
-
-  onChangeTriggerPosition = (triggerPosition) => {
-    this.props.editor.setPropertySelected('triggerPosition', triggerPosition)
-  }
-
-  onChangeTriggerRotation = (triggerRotation) => {
-    this.props.editor.setPropertySelected('triggerRotation', triggerRotation)
-  }
-
-  onChangeTriggerScale = (triggerScale) => {
-    this.props.editor.setPropertySelected('triggerScale', triggerScale)
-  }
-
-  onChangeCubemapBake = (cubemapBakeId) => {
-    this.props.editor.setPropertySelected('cubemapBakeId', cubemapBakeId)
-  }
-
-  componentDidUpdate() {
-    if ((this.props.node as any).entityId !== this.state.entityId) {
-      this.setState({ entityId: (this.props.node as any).entityId })
-      this.loadPortals()
-    }
-  }
-
-  componentDidMount() {
-    this.setState({ entityId: (this.props.node as any).entityId })
-    this.loadPortals()
-  }
-
-  loadPortals = async () => {
-    const portalsDetail = await fetchUrl(`${Config.publicRuntimeConfig.apiServer}/portal/list`)
-      .then((res) => res.json())
-      .catch((err) => {
-        console.error(err)
-        return []
-      })
-    const portals = []
-
-    portalsDetail.forEach((portal) => {
-      if (portal.entity.entityId === (this.props.node as any).entityId) return
-      portals.push({
-        name: `${portal.entity.collection.name} (${portal.entity.name})`,
-        value: portal.entity.entityId
-      })
+  const onChangeValue = (prop) => (value) => {
+    CommandManager.instance.setPropertyOnSelectionEntities({
+      component: PortalComponent,
+      properties: { [prop]: value }
     })
-
-    this.setState({ portals })
   }
 
-  // rendering view of editor for properties of PortalNode
-  render() {
-    PortalNodeEditor.description = this.props.t('editor:properties.portal.description')
-    const node = this.props.node as PortalNode
-    return (
-      /* @ts-ignore */
-      <NodeEditor description={PortalNodeEditor.description} {...this.props}>
-        {/* @ts-ignore */}
-        <InputGroup name="Location" label={this.props.t('editor:properties.portal.lbl-locationName')}>
-          {/* @ts-ignore */}
-          <ControlledStringInput value={node.locationName} onChange={this.onChangeLocationName} />
-        </InputGroup>
-        {/* @ts-ignore */}
-        <InputGroup name="Portal" label={this.props.t('editor:properties.portal.lbl-portal')}>
-          {/* @ts-ignore */}
-          <SelectInput
-            options={this.state.portals}
-            value={node.linkedPortalId}
-            onChange={this.onChangeLinkedPortalId}
-            filterOption={(option: PortalFilterOption, searchString: string) => {
-              return option.label.includes(searchString || '')
-            }}
-            getOptionLabel={(data: PortalDetail) => data.name}
-          />
-        </InputGroup>
-        {/* @ts-ignore */}
-        <InputGroup name="Model Url" label={this.props.t('editor:properties.portal.lbl-modelUrl')}>
-          {/* @ts-ignore */}
-          <ControlledStringInput value={node.modelUrl} onChange={this.onChangeModelUrl} />
-        </InputGroup>
-        {/* @ts-ignore */}
-        <InputGroup name="Display Text" label={this.props.t('editor:properties.portal.lbl-displayText')}>
-          {/* @ts-ignore */}
-          <ControlledStringInput value={node.displayText} onChange={this.onChangeDisplayText} />
-        </InputGroup>
-        {/* @ts-ignore */}
-        <InputGroup name="Cubemap Bake" label={this.props.t('editor:properties.portal.lbl-cubemapBake')}>
-          {/* @ts-ignore */}
-          <SelectInput
-            options={this.props.editor.scene.children
-              .filter((obj: Object3D) => {
-                return (obj as any).nodeName === CubemapBakeNode.nodeName
-              })
-              .map((obj: Object3D) => {
-                return {
-                  label: obj.name,
-                  value: obj.uuid
-                }
-              })}
-            value={node.cubemapBakeId}
-            onChange={this.onChangeCubemapBake}
-          />
-        </InputGroup>
-        {/* @ts-ignore */}
-        <InputGroup name="Spawn Position" label={this.props.t('editor:properties.portal.lbl-spawnPosition')}>
-          <Vector3Input value={node.spawnPosition} onChange={this.onChangeSpawnPosition} />
-        </InputGroup>
-        {/* @ts-ignore */}
-        <InputGroup name="Spawn Rotation" label={this.props.t('editor:properties.portal.lbl-spawnRotation')}>
-          <EulerInput value={node.spawnRotation} onChange={this.onChangeSpawnRotation} />
-        </InputGroup>
-        {/* @ts-ignore */}
-        <InputGroup name="Trigger Position" label={this.props.t('editor:properties.portal.lbl-triggerPosition')}>
-          <Vector3Input value={node.triggerPosition} onChange={this.onChangeTriggerPosition} />
-        </InputGroup>
-        {/* @ts-ignore */}
-        <InputGroup name="Trigger Rotation" label={this.props.t('editor:properties.portal.lbl-triggerRotation')}>
-          <EulerInput value={node.triggerRotation} onChange={this.onChangeTriggerRotation} />
-        </InputGroup>
-        {/* @ts-ignore */}
-        <InputGroup name="Trigger Scale" label={this.props.t('editor:properties.portal.lbl-triggerScale')}>
-          <Vector3Input value={node.triggerScale} onChange={this.onChangeTriggerScale} />
-        </InputGroup>
-      </NodeEditor>
+  const loadPortals = async () => {
+    const portalsDetail: PortalDetail[] = []
+    try {
+      portalsDetail.push(...(await client.service('portal').find()).data)
+      console.log('portalsDetail', portalsDetail, props.node.uuid)
+    } catch (error) {
+      throw new Error(error)
+    }
+    setPortals(
+      portalsDetail
+        .filter((portal) => portal.portalEntityId !== props.node.uuid)
+        .map(({ portalEntityId, sceneName }) => {
+          return { value: portalEntityId, label: sceneName }
+        })
     )
   }
+
+  useEffect(() => {
+    if (props.node.uuid !== entityId) {
+      setEntityId(props.node.uuid)
+      loadPortals()
+    }
+  }, [props.node.uuid, entityId])
+
+  useEffect(() => {
+    setEntityId(props.node.uuid)
+    loadPortals()
+  }, [])
+
+  const portalComponent = getComponent(props.node.entity, PortalComponent)
+
+  if (portalComponent.spawnRotation) euler.setFromQuaternion(portalComponent.spawnRotation)
+  else euler.set(0, 0, 0)
+
+  return (
+    <NodeEditor description={t('editor:properties.portal.description')} {...props}>
+      <InputGroup name="Location" label={t('editor:properties.portal.lbl-locationName')}>
+        <StringInput value={portalComponent.location} onChange={updateProperty(PortalComponent, 'location')} />
+      </InputGroup>
+      <InputGroup name="Portal" label={t('editor:properties.portal.lbl-portal')}>
+        <SelectInput
+          options={portals}
+          value={portalComponent.linkedPortalId}
+          onChange={updateProperty(PortalComponent, 'linkedPortalId')}
+          filterOption={(option: PortalFilterOption, searchString: string) => {
+            return option.label.includes(searchString || '')
+          }}
+          getOptionLabel={(data) => data.name}
+        />
+      </InputGroup>
+      {/* TODO */}
+      {/* <InputGroup name="Cubemap Bake" label={t('editor:properties.portal.lbl-cubemapBake')}>
+        <SelectInput
+          options={Engine.scene.children
+            .filter((obj: Object3D) => {
+              return (obj as any).nodeName === CubemapBakeportalComponent.nodeName
+            })
+            .map((obj: Object3D) => {
+              return {
+                label: obj.name,
+                value: obj.uuid
+              }
+            })}
+          value={portalComponent.cubemapBakeId}
+          onChange={updateProperty(PortalComponent, 'cubemapBakeId')}
+        />
+      </InputGroup> */}
+      <InputGroup name="Spawn Position" label={t('editor:properties.portal.lbl-spawnPosition')}>
+        <Vector3Input
+          value={portalComponent.spawnPosition}
+          onChange={updateProperty(PortalComponent, 'spawnPosition')}
+        />
+      </InputGroup>
+      <InputGroup name="Spawn Rotation" label={t('editor:properties.portal.lbl-spawnRotation')}>
+        <EulerInput value={euler} onChange={updateProperty(PortalComponent, 'spawnRotation')} />
+      </InputGroup>
+    </NodeEditor>
+  )
 }
 
-export default withTranslation()(PortalNodeEditor)
+PortalNodeEditor.iconComponent = MeetingRoomIcon
+
+export default PortalNodeEditor

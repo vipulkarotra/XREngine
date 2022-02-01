@@ -1,61 +1,62 @@
 /** Functions to provide system level functionalities. */
 
 import { SystemUpdateType } from '../functions/SystemUpdateType'
-import { pipe, System } from 'bitecs'
-import { PipelineType } from '../classes/World'
+import { World } from '../classes/World'
 
-export type CreateSystemFunctionType<A extends any> = (props: A) => Promise<System>
+export type CreateSystemFunctionType<A extends any> = (world: World, props?: A) => Promise<() => void>
+export type SystemModule<A extends any> = { default: CreateSystemFunctionType<A> }
+export type SystemModulePromise<A extends any> = Promise<SystemModule<A>>
 
-export type SystemInitializeType<A> = {
+export type SystemModuleType<A> = {
+  systemModulePromise: SystemModulePromise<A>
   type: SystemUpdateType
-  system: CreateSystemFunctionType<A>
+  sceneSystem?: boolean
   args?: A
-  before?: CreateSystemFunctionType<A>
-  after?: CreateSystemFunctionType<A>
 }
 
-const pipelines: {
-  [SystemUpdateType.Fixed]: SystemInitializeType<any>[]
-  [SystemUpdateType.Free]: SystemInitializeType<any>[]
-  [SystemUpdateType.Network]: SystemInitializeType<any>[]
-} = {
-  [SystemUpdateType.Fixed]: [],
-  [SystemUpdateType.Free]: [],
-  [SystemUpdateType.Network]: []
+export type SystemFactoryType<A> = {
+  systemModule: SystemModule<A>
+  type: SystemUpdateType
+  sceneSystem?: boolean
+  args?: A
 }
 
-export const registerSystem = <A>(type: SystemUpdateType, system: CreateSystemFunctionType<A>, args?: A) => {
-  pipelines[type].push({ type, system, args })
+export type SystemInstanceType = {
+  name: string
+  type: SystemUpdateType
+  sceneSystem: boolean
+  execute: () => void
 }
 
-export const unregisterSystem = <A>(type: SystemUpdateType, system: CreateSystemFunctionType<A>, args?: A) => {
-  const idx = pipelines[type].findIndex((i) => {
-    return i.system === system
-  })
-  pipelines[type].splice(idx, 1)
-}
-
-export const injectSystem = <A>(init: SystemInitializeType<A>) => {
-  if ('before' in init) {
-    const idx = pipelines[init.type].findIndex((i) => {
-      return i.before === init.before
+export const initSystems = async (world: World, systemModulesToLoad: SystemModuleType<any>[]) => {
+  const loadSystemInjection = async (s: SystemFactoryType<any>) => {
+    const system = await s.systemModule.default(world, s.args)
+    return {
+      name: s.systemModule.default.name,
+      type: s.type,
+      sceneSystem: s.sceneSystem,
+      execute: () => {
+        try {
+          system()
+        } catch (e) {
+          console.error(e)
+        }
+      }
+    } as SystemInstanceType
+  }
+  const systemModule = await Promise.all(
+    systemModulesToLoad.map(async (s) => {
+      return {
+        args: s.args,
+        type: s.type,
+        sceneSystem: s.sceneSystem,
+        systemModule: await s.systemModulePromise
+      }
     })
-    delete init.before
-    pipelines[init.type].splice(idx, 0, init)
-  } else if ('after' in init) {
-    const idx =
-      pipelines[init.type].findIndex((i) => {
-        return i.after === init.after
-      }) + 1
-    delete init.after
-    pipelines[init.type].splice(idx, 0, init)
-  }
-}
-
-export const createPipeline = async (updateType: SystemUpdateType): Promise<PipelineType> => {
-  let systems = []
-  for (const { system, args } of pipelines[updateType]) {
-    systems.push(await system(args))
-  }
-  return pipe(...systems) as any as PipelineType
+  )
+  const systems = await Promise.all(systemModule.map(loadSystemInjection))
+  systems.forEach((s) => {
+    world.pipelines[s.type].push(s)
+    console.log(`${s.type} ${s.name}`)
+  })
 }

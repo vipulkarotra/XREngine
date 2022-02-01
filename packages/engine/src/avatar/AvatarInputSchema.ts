@@ -1,26 +1,48 @@
-import { Mesh, Quaternion, Vector2, Vector3 } from 'three'
+import { Quaternion, SkinnedMesh, Vector2, Vector3 } from 'three'
 import { FollowCameraComponent } from '../camera/components/FollowCameraComponent'
+import { TargetCameraRotationComponent } from '../camera/components/TargetCameraRotationComponent'
 import { CameraMode } from '../camera/types/CameraMode'
 import { LifecycleValue } from '../common/enums/LifecycleValue'
 import { ParityValue } from '../common/enums/ParityValue'
-import { NumericalType } from '../common/types/NumericalTypes'
+import { throttle } from '../common/functions/FunctionHelpers'
+import { clamp } from '../common/functions/MathLerpFunctions'
 import { Entity } from '../ecs/classes/Entity'
-import { addComponent, getComponent } from '../ecs/functions/EntityFunctions'
+import { addComponent, getComponent, hasComponent, removeComponent } from '../ecs/functions/ComponentFunctions'
 import { InputComponent } from '../input/components/InputComponent'
 import { BaseInput } from '../input/enums/BaseInput'
-import { CameraInput, GamepadAxis, GamepadButtons, MouseInput, TouchInputs, XRAxes } from '../input/enums/InputEnums'
+import {
+  CameraInput,
+  GamepadAxis,
+  GamepadButtons,
+  MouseInput,
+  TouchInputs,
+  XR6DOF,
+  XRAxes
+} from '../input/enums/InputEnums'
 import { InputType } from '../input/enums/InputType'
 import { InputBehaviorType, InputSchema } from '../input/interfaces/InputSchema'
 import { InputValue } from '../input/interfaces/InputValue'
 import { InputAlias } from '../input/types/InputAlias'
+import { InteractableComponent } from '../interaction/components/InteractableComponent'
 import { InteractedComponent } from '../interaction/components/InteractedComponent'
 import { InteractorComponent } from '../interaction/components/InteractorComponent'
+import {
+  changeHand,
+  equipEntity,
+  getAttachmentPoint,
+  getParity,
+  unequipEntity
+} from '../interaction/functions/equippableFunctions'
+import { EquipperComponent } from '../interaction/components/EquipperComponent'
 import { AutoPilotClickRequestComponent } from '../navigation/component/AutoPilotClickRequestComponent'
 import { Object3DComponent } from '../scene/components/Object3DComponent'
 import { TransformComponent } from '../transform/components/TransformComponent'
+import { XRLGripButtonComponent, XRRGripButtonComponent } from '../xr/components/XRGripButtonComponent'
 import { XRUserSettings, XR_ROTATION_MODE } from '../xr/types/XRUserSettings'
 import { AvatarControllerComponent } from './components/AvatarControllerComponent'
 import { switchCameraMode } from './functions/switchCameraMode'
+import { EquippedComponent } from '../interaction/components/EquippedComponent'
+import { Engine } from '../ecs/classes/Engine'
 
 const getParityFromInputValue = (key: InputAlias): ParityValue => {
   switch (key) {
@@ -33,6 +55,27 @@ const getParityFromInputValue = (key: InputAlias): ParityValue => {
   }
 }
 
+const grip = (entity: Entity, inputKey: InputAlias, inputValue: InputValue, delta: number): void => {
+  switch (inputValue.lifecycleState) {
+    case LifecycleValue.Started: {
+      if (inputKey == BaseInput.GRIP_LEFT) {
+        addComponent(entity, XRLGripButtonComponent, {})
+      } else {
+        addComponent(entity, XRRGripButtonComponent, {})
+      }
+      break
+    }
+    case LifecycleValue.Ended: {
+      if (inputKey == BaseInput.GRIP_LEFT) {
+        removeComponent(entity, XRLGripButtonComponent)
+      } else {
+        removeComponent(entity, XRRGripButtonComponent)
+      }
+      break
+    }
+  }
+}
+
 /**
  *
  * @param entity the one who interacts
@@ -40,27 +83,64 @@ const getParityFromInputValue = (key: InputAlias): ParityValue => {
  * @param delta
  */
 
-const interact = (entity: Entity, inputKey: InputAlias, inputValue: InputValue<NumericalType>, delta: number): void => {
-  if (inputValue.lifecycleState !== LifecycleValue.STARTED) return
+const interact = (entity: Entity, inputKey: InputAlias, inputValue: InputValue, delta: number): void => {
+  if (inputValue.lifecycleState !== LifecycleValue.Started) return
   const parityValue = getParityFromInputValue(inputKey)
+
+  const equipperComponent = getComponent(entity, EquipperComponent)
+  if (equipperComponent?.equippedEntity) {
+    const equippedComponent = getComponent(equipperComponent.equippedEntity, EquippedComponent)
+    const attachmentPoint = equippedComponent.attachmentPoint
+    const currentParity = getParity(attachmentPoint)
+    if (currentParity !== parityValue) {
+      changeHand(entity, getAttachmentPoint(parityValue))
+    } else {
+      drop(entity, inputKey, inputValue, delta)
+    }
+    return
+  }
 
   const interactor = getComponent(entity, InteractorComponent)
   if (!interactor?.focusedInteractive) return
 
-  addComponent(interactor.focusedInteractive, InteractedComponent, { interactor: entity, parity: parityValue })
+  const interactiveComponent = getComponent(interactor.focusedInteractive, InteractableComponent)
+  // TODO: Define interaction types in some enum?
+  if (interactiveComponent.interactionType === 'equippable') {
+    if (
+      !interactiveComponent.validUserId ||
+      (interactiveComponent.validUserId && interactiveComponent.validUserId === Engine.userId)
+    ) {
+      const attachmentPoint = getAttachmentPoint(parityValue)
+      equipEntity(entity, interactor.focusedInteractive, attachmentPoint)
+    } else {
+      console.warn('Invalid user is trying to equip.')
+    }
+  } else {
+    addComponent(interactor.focusedInteractive, InteractedComponent, { interactor: entity, parity: parityValue })
+  }
+}
+
+/**
+ *
+ * @param entity the that holds the equipped object
+ * @param args
+ * @param delta
+ */
+
+const drop = (entity: Entity, inputKey: InputAlias, inputValue: InputValue, delta: number): void => {
+  console.log('dropping')
+  const equipper = getComponent(entity, EquipperComponent)
+  if (!equipper?.equippedEntity) return
+
+  unequipEntity(entity)
 }
 
 /**
  * Switch Camera mode from first person to third person and wise versa.
  * @param entity Entity holding {@link camera/components/FollowCameraComponent.FollowCameraComponent | Follow camera} component.
  */
-const cycleCameraMode = (
-  entity: Entity,
-  inputKey: InputAlias,
-  inputValue: InputValue<NumericalType>,
-  delta: number
-): void => {
-  if (inputValue.lifecycleState !== LifecycleValue.STARTED) return
+const cycleCameraMode = (entity: Entity, inputKey: InputAlias, inputValue: InputValue, delta: number): void => {
+  if (inputValue.lifecycleState !== LifecycleValue.Started) return
   const cameraFollow = getComponent(entity, FollowCameraComponent)
 
   switch (cameraFollow?.mode) {
@@ -85,97 +165,124 @@ const cycleCameraMode = (
  * Fix camera behind the avatar to follow the avatar.
  * @param entity Entity on which camera will be fixed.
  */
-const fixedCameraBehindAvatar: InputBehaviorType = (
+export const fixedCameraBehindAvatar: InputBehaviorType = (
   entity: Entity,
   inputKey: InputAlias,
-  inputValue: InputValue<NumericalType>,
+  inputValue: InputValue,
   delta: number
 ): void => {
-  if (inputValue.lifecycleState !== LifecycleValue.STARTED) return
+  if (inputValue.lifecycleState !== LifecycleValue.Started) return
   const follower = getComponent(entity, FollowCameraComponent)
   if (follower && follower.mode !== CameraMode.FirstPerson) {
     follower.locked = !follower.locked
   }
 }
 
-const switchShoulderSide: InputBehaviorType = (
+export const switchShoulderSide: InputBehaviorType = (
   entity: Entity,
   inputKey: InputAlias,
-  inputValue: InputValue<NumericalType>,
+  inputValue: InputValue,
   delta: number
 ): void => {
-  if (inputValue.lifecycleState !== LifecycleValue.STARTED) return
+  if (inputValue.lifecycleState !== LifecycleValue.Started) return
   const cameraFollow = getComponent(entity, FollowCameraComponent)
   if (cameraFollow) {
     cameraFollow.shoulderSide = !cameraFollow.shoulderSide
   }
 }
 
-let lastScrollDelta = 0
+export const setTargetCameraRotation = (entity: Entity, phi: number, theta: number, time = 0.3) => {
+  const cameraRotationTransition = getComponent(entity, TargetCameraRotationComponent)
+  if (!cameraRotationTransition) {
+    addComponent(entity, TargetCameraRotationComponent, {
+      phi: phi,
+      phiVelocity: { value: 0 },
+      theta: theta,
+      thetaVelocity: { value: 0 },
+      time: time
+    })
+  } else {
+    cameraRotationTransition.phi = phi
+    cameraRotationTransition.theta = theta
+    cameraRotationTransition.time = time
+  }
+}
+
+let lastScrollValue = 0
+
 /**
  * Change camera distance.
  * @param entity Entity holding camera and input component.
  */
-const changeCameraDistanceByDelta: InputBehaviorType = (
+export const changeCameraDistanceByDelta: InputBehaviorType = (
   entity: Entity,
   inputKey: InputAlias,
-  inputValue: InputValue<NumericalType>,
+  inputValue: InputValue,
   delta: number
 ): void => {
-  const inputComponent = getComponent(entity, InputComponent)
+  // debugger
+  // console.log("change cam", inputValue, delta)
+  const value = inputValue.value[0]
+  const scrollDelta = Math.sign(value - lastScrollValue) * 0.5
+  lastScrollValue = value
 
-  if (!inputComponent.data.has(inputKey)) {
+  if (scrollDelta === 0) {
     return
   }
 
-  const cameraFollow = getComponent(entity, FollowCameraComponent)
-  if (cameraFollow === undefined || cameraFollow.mode === CameraMode.Strategic) return //console.warn("cameraFollow is undefined")
+  const followComponent = getComponent(entity, FollowCameraComponent)
 
-  const inputPrevValue = (inputComponent.prevData.get(inputKey)?.value as number) ?? 0
-  const value = inputValue.value as number
-
-  const scrollDelta =
-    Math.min(1, Math.max(-1, value - inputPrevValue)) * (inputValue.inputAction === TouchInputs.Scale ? 0.25 : 1)
-  if (cameraFollow.mode !== CameraMode.ThirdPerson && scrollDelta === lastScrollDelta) {
+  if (!followComponent) {
     return
   }
-  lastScrollDelta = scrollDelta
 
-  switch (cameraFollow.mode) {
-    case CameraMode.FirstPerson:
-      if (scrollDelta > 0) {
-        switchCameraMode(entity, { cameraMode: CameraMode.ShoulderCam })
-      }
-      break
-    case CameraMode.ShoulderCam:
-      if (scrollDelta > 0) {
-        switchCameraMode(entity, { cameraMode: CameraMode.ThirdPerson })
-        cameraFollow.distance = cameraFollow.minDistance + 1
-      }
-      if (scrollDelta < 0) {
-        switchCameraMode(entity, { cameraMode: CameraMode.FirstPerson })
-      }
-      break
-    default:
-    case CameraMode.ThirdPerson:
-      const newDistance = cameraFollow.distance + scrollDelta
-      cameraFollow.distance = Math.max(cameraFollow.minDistance, Math.min(cameraFollow.maxDistance, newDistance))
+  const epsilon = 0.001
+  const nextZoomLevel = clamp(followComponent.zoomLevel + scrollDelta, epsilon, followComponent.maxDistance)
 
-      if (cameraFollow.distance >= cameraFollow.maxDistance) {
-        if (scrollDelta > 0) {
-          switchCameraMode(entity, { cameraMode: CameraMode.TopDown })
-        }
-      } else if (cameraFollow.distance <= cameraFollow.minDistance) {
-        if (scrollDelta < 0) {
-          switchCameraMode(entity, { cameraMode: CameraMode.ShoulderCam })
-        }
-      }
+  // Move out of first person mode
+  if (followComponent.zoomLevel <= epsilon && scrollDelta > 0) {
+    followComponent.zoomLevel = followComponent.minDistance
+    return
+  }
 
+  // Move to first person mode
+  if (nextZoomLevel < followComponent.minDistance) {
+    followComponent.zoomLevel = epsilon
+    setTargetCameraRotation(entity, 0, followComponent.theta)
+    return
+  }
+
+  // Rotate camera to the top but let the player rotate if he/she desires
+  if (Math.abs(followComponent.maxDistance - nextZoomLevel) <= 1.0 && scrollDelta > 0) {
+    setTargetCameraRotation(entity, 85, followComponent.theta)
+  }
+
+  // Rotate from top
+  if (
+    Math.abs(followComponent.maxDistance - followComponent.zoomLevel) <= 1.0 &&
+    scrollDelta < 0 &&
+    followComponent.phi >= 80
+  ) {
+    setTargetCameraRotation(entity, 45, followComponent.theta)
+  }
+
+  followComponent.zoomLevel = nextZoomLevel
+}
+
+export const setCameraRotation: InputBehaviorType = (
+  entity: Entity,
+  inputKey: InputAlias,
+  inputValue: InputValue,
+  delta: number
+): void => {
+  const followComponent = getComponent(entity, FollowCameraComponent)
+
+  switch (inputKey) {
+    case BaseInput.CAMERA_ROTATE_LEFT:
+      followComponent.theta += 50 * delta
       break
-    case CameraMode.TopDown:
-      if (scrollDelta < 0) {
-        switchCameraMode(entity, { cameraMode: CameraMode.ThirdPerson })
-      }
+    case BaseInput.CAMERA_ROTATE_RIGHT:
+      followComponent.theta -= 50 * delta
       break
   }
 }
@@ -196,32 +303,32 @@ const morphNameByInput = {
 const setAvatarExpression: InputBehaviorType = (
   entity: Entity,
   inputKey: InputAlias,
-  inputValue: InputValue<NumericalType>,
+  inputValue: InputValue,
   delta: number
 ): void => {
   const object = getComponent(entity, Object3DComponent)
-  const body = object.value?.getObjectByName('Body') as Mesh
+  let body
+  object.value.traverse((obj: SkinnedMesh) => {
+    if (!body && obj.morphTargetDictionary) body = obj
+  })
 
-  if (!body?.isMesh) {
+  if (!body?.isMesh || !body?.morphTargetDictionary) {
+    console.warn('[Avatar Emotions]: This avatar does not support expressive visemes.')
     return
   }
 
-  const input = getComponent(entity, InputComponent)
-  const inputData = input?.data.get(inputKey)
-  if (!inputData) {
-    return
-  }
-  const morphValue = inputData.value
+  const morphValue = inputValue.value
   const morphName = morphNameByInput[inputKey]
   const morphIndex = body.morphTargetDictionary[morphName]
   if (typeof morphIndex !== 'number') {
+    console.warn('[Avatar Emotions]: This avatar does not support the', morphName, ' expression.')
     return
   }
 
-  // console.warn(args.input + ": " + morphName + ":" + morphIndex + " = " + morphValue)
+  // console.warn(inputKey + ": " + morphName + ":" + morphIndex + " = " + morphValue)
   if (morphName && morphValue !== null) {
     if (typeof morphValue === 'number') {
-      body.morphTargetInfluences[morphIndex] = morphValue // 0.0 - 1.0
+      body.morphTargetInfluences![morphIndex] = morphValue // 0.0 - 1.0
     }
   }
 }
@@ -239,41 +346,37 @@ const changedDirection = (radian: number) => {
 const moveByInputAxis: InputBehaviorType = (
   entity: Entity,
   inputKey: InputAlias,
-  inputValue: InputValue<NumericalType>,
+  inputValue: InputValue,
   delta: number
 ): void => {
   const controller = getComponent(entity, AvatarControllerComponent)
-  const input = getComponent(entity, InputComponent)
-
-  const data = input.data.get(inputKey)
-
-  if (data.type === InputType.TWODIM) {
-    controller.localMovementDirection.z = data.value[0]
-    controller.localMovementDirection.x = data.value[1]
-  } else if (data.type === InputType.THREEDIM) {
+  if (inputValue.type === InputType.TWODIM) {
+    controller.localMovementDirection.z = inputValue.value[0]
+    controller.localMovementDirection.x = inputValue.value[1]
+  } else if (inputValue.type === InputType.THREEDIM) {
     // TODO: check if this mapping correct
-    controller.localMovementDirection.z = data.value[2]
-    controller.localMovementDirection.x = data.value[0]
+    controller.localMovementDirection.z = inputValue.value[2]
+    controller.localMovementDirection.x = inputValue.value[0]
   }
 }
-const setWalking: InputBehaviorType = (
+export const setWalking: InputBehaviorType = (
   entity: Entity,
   inputKey: InputAlias,
-  inputValue: InputValue<NumericalType>,
+  inputValue: InputValue,
   delta: number
 ): void => {
   const controller = getComponent(entity, AvatarControllerComponent)
-  controller.isWalking = inputValue.lifecycleState !== LifecycleValue.ENDED
+  controller.isWalking = inputValue.lifecycleState !== LifecycleValue.Ended
 }
 
 const setLocalMovementDirection: InputBehaviorType = (
   entity: Entity,
   inputKey: InputAlias,
-  inputValue: InputValue<NumericalType>,
+  inputValue: InputValue,
   delta: number
 ): void => {
   const controller = getComponent(entity, AvatarControllerComponent)
-  const hasEnded = inputValue.lifecycleState === LifecycleValue.ENDED
+  const hasEnded = inputValue.lifecycleState === LifecycleValue.Ended
   switch (inputKey) {
     case BaseInput.JUMP:
       controller.localMovementDirection.y = hasEnded ? 0 : 1
@@ -297,14 +400,11 @@ const setLocalMovementDirection: InputBehaviorType = (
 const moveFromXRInputs: InputBehaviorType = (
   entity: Entity,
   inputKey: InputAlias,
-  inputValue: InputValue<NumericalType>,
+  inputValue: InputValue,
   delta: number
 ): void => {
   const controller = getComponent(entity, AvatarControllerComponent)
-  const input = getComponent(entity, InputComponent)
-  const values = input.data.get(BaseInput.XR_AXIS_MOVE)?.value
-  if (!values) return
-
+  const values = inputValue.value
   controller.localMovementDirection.x = values[0] ?? controller.localMovementDirection.x
   controller.localMovementDirection.z = values[1] ?? controller.localMovementDirection.z
   controller.localMovementDirection.normalize()
@@ -318,11 +418,10 @@ const upVec = new Vector3(0, 1, 0)
 const lookFromXRInputs: InputBehaviorType = (
   entity: Entity,
   inputKey: InputAlias,
-  inputValue: InputValue<NumericalType>,
+  inputValue: InputValue,
   delta: number
 ): void => {
-  const input = getComponent(entity, InputComponent)
-  const values = input.data.get(BaseInput.XR_AXIS_LOOK)?.value
+  const values = inputValue.value
   const rotationAngle = XRUserSettings.rotationAngle
   let newAngleDiff = 0
   switch (XRUserSettings.rotation) {
@@ -350,41 +449,59 @@ const lookFromXRInputs: InputBehaviorType = (
   transform.rotation.multiply(quat)
 }
 
-const lookByInputAxis: InputBehaviorType = (entity: Entity): void => {
+const axisLookSensitivity = 320
+
+const lookByInputAxis: InputBehaviorType = (
+  entity: Entity,
+  inputKey: InputAlias,
+  inputValue: InputValue,
+  delta: number
+): void => {
+  const target = getComponent(entity, TargetCameraRotationComponent) || getComponent(entity, FollowCameraComponent)
+  if (target)
+    setTargetCameraRotation(
+      entity,
+      target.phi - inputValue.value[1] * axisLookSensitivity,
+      target.theta - inputValue.value[0] * axisLookSensitivity,
+      0.1
+    )
+}
+
+const gamepadLook: InputBehaviorType = (entity: Entity): void => {
   const input = getComponent(entity, InputComponent)
-  const data = input.data.get(BaseInput.GAMEPAD_STICK_RIGHT)
+  const data = input.data.get(BaseInput.GAMEPAD_STICK_RIGHT)!
+  if (data.lifecycleState === LifecycleValue.Ended) {
+    input.data.set(BaseInput.LOOKTURN_PLAYERONE, {
+      type: data.type,
+      value: [0, 0],
+      lifecycleState: LifecycleValue.Changed
+    })
+  }
   if (data.type === InputType.TWODIM) {
     input.data.set(BaseInput.LOOKTURN_PLAYERONE, {
       type: data.type,
       value: [data.value[0], data.value[1]],
-      lifecycleState: LifecycleValue.CHANGED
+      lifecycleState: LifecycleValue.Changed
     })
   } else if (data.type === InputType.THREEDIM) {
     input.data.set(BaseInput.LOOKTURN_PLAYERONE, {
       type: data.type,
       value: [data.value[0], data.value[2]],
-      lifecycleState: LifecycleValue.CHANGED
+      lifecycleState: LifecycleValue.Changed
     })
   }
 }
 
-export const clickNavMesh: InputBehaviorType = (actorEntity, inputKey, inputValue): void => {
-  if (inputValue.lifecycleState !== LifecycleValue.ENDED) {
+export const handlePrimaryButton: InputBehaviorType = (entity, inputKey, inputValue): void => {
+  if (inputValue.lifecycleState !== LifecycleValue.Ended) {
     return
   }
-  const input = getComponent(actorEntity, InputComponent)
+  const input = getComponent(entity, InputComponent)
   const coords = input.data.get(BaseInput.SCREENXY)?.value
   if (coords) {
-    addComponent(actorEntity, AutoPilotClickRequestComponent, { coords: new Vector2(coords[0], coords[1]) })
+    addComponent(entity, AutoPilotClickRequestComponent, { coords: new Vector2(coords[0], coords[1]) })
   }
 }
-
-export const resetAvatarInput = (entity: Entity, delta: number) => {
-  const inputComponent = getComponent(entity, InputComponent)
-}
-
-// what do we want this to look like?
-// instead of assigning a hardware input to a base input, we want to map them
 
 export const createAvatarInput = () => {
   const map: Map<InputAlias, InputAlias> = new Map()
@@ -408,8 +525,12 @@ export const createAvatarInput = () => {
 
   map.set(GamepadButtons.A, BaseInput.INTERACT)
   map.set(GamepadButtons.B, BaseInput.JUMP)
+  // map.set(GamepadButtons.X, BaseInput.JUMP)
+  // map.set(GamepadButtons.Y, BaseInput.INTERACT)
   map.set(GamepadButtons.LTrigger, BaseInput.GRAB_LEFT)
   map.set(GamepadButtons.RTrigger, BaseInput.GRAB_RIGHT)
+  map.set(GamepadButtons.LBumper, BaseInput.GRIP_LEFT)
+  map.set(GamepadButtons.RBumper, BaseInput.GRIP_RIGHT)
   map.set(GamepadButtons.DPad1, BaseInput.FORWARD)
   map.set(GamepadButtons.DPad2, BaseInput.BACKWARD)
   map.set(GamepadButtons.DPad3, BaseInput.LEFT)
@@ -426,17 +547,26 @@ export const createAvatarInput = () => {
     map.set(XRAxes.Right, BaseInput.XR_AXIS_LOOK)
   }
 
-  map.set('w', BaseInput.FORWARD)
-  map.set('a', BaseInput.LEFT)
-  map.set('s', BaseInput.BACKWARD)
-  map.set('d', BaseInput.RIGHT)
-  map.set('e', BaseInput.INTERACT)
-  map.set(' ', BaseInput.JUMP)
-  map.set('shift', BaseInput.WALK)
-  map.set('p', BaseInput.POINTER_LOCK)
-  map.set('v', BaseInput.SWITCH_CAMERA)
-  map.set('c', BaseInput.SWITCH_SHOULDER_SIDE)
-  map.set('f', BaseInput.LOCKING_CAMERA)
+  map.set(XR6DOF.HMD, BaseInput.XR_HEAD)
+  map.set(XR6DOF.LeftHand, BaseInput.XR_CONTROLLER_LEFT_HAND)
+  map.set(XR6DOF.RightHand, BaseInput.XR_CONTROLLER_RIGHT_HAND)
+
+  map.set('KeyW', BaseInput.FORWARD)
+  map.set('ArrowUp', BaseInput.FORWARD)
+  map.set('KeyA', BaseInput.LEFT)
+  map.set('KeyS', BaseInput.BACKWARD)
+  map.set('ArrowDown', BaseInput.BACKWARD)
+  map.set('KeyD', BaseInput.RIGHT)
+  map.set('KeyE', BaseInput.INTERACT)
+  map.set('KeyU', BaseInput.DROP_OBJECT)
+  map.set('Space', BaseInput.JUMP)
+  map.set('ShiftLeft', BaseInput.WALK)
+  map.set('KeyP', BaseInput.POINTER_LOCK)
+  map.set('KepV', BaseInput.SWITCH_CAMERA)
+  map.set('KeyC', BaseInput.SWITCH_SHOULDER_SIDE)
+  map.set('KeyF', BaseInput.LOCKING_CAMERA)
+  map.set('ArrowLeft', BaseInput.CAMERA_ROTATE_LEFT)
+  map.set('ArrowRight', BaseInput.CAMERA_ROTATE_RIGHT)
 
   map.set(CameraInput.Neutral, CameraInput.Neutral)
   map.set(CameraInput.Angry, CameraInput.Angry)
@@ -451,18 +581,17 @@ export const createAvatarInput = () => {
 
   return map
 }
+
 export const createBehaviorMap = () => {
   const map = new Map<InputAlias, InputBehaviorType>()
 
-  // BUTTON
-
-  map.set(BaseInput.SWITCH_CAMERA, cycleCameraMode)
-  map.set(BaseInput.LOCKING_CAMERA, fixedCameraBehindAvatar)
-  map.set(BaseInput.SWITCH_SHOULDER_SIDE, switchShoulderSide)
-
   map.set(BaseInput.INTERACT, interact)
+  map.set(BaseInput.DROP_OBJECT, drop)
   map.set(BaseInput.GRAB_LEFT, interact)
   map.set(BaseInput.GRAB_RIGHT, interact)
+
+  map.set(BaseInput.GRIP_LEFT, grip)
+  map.set(BaseInput.GRIP_RIGHT, grip)
 
   map.set(BaseInput.JUMP, setLocalMovementDirection)
   map.set(BaseInput.WALK, setWalking)
@@ -470,27 +599,30 @@ export const createBehaviorMap = () => {
   map.set(BaseInput.BACKWARD, setLocalMovementDirection)
   map.set(BaseInput.LEFT, setLocalMovementDirection)
   map.set(BaseInput.RIGHT, setLocalMovementDirection)
-
-  // AXIS
+  map.set(BaseInput.CAMERA_ROTATE_LEFT, setCameraRotation)
+  map.set(BaseInput.CAMERA_ROTATE_RIGHT, setCameraRotation)
 
   map.set(CameraInput.Happy, setAvatarExpression)
   map.set(CameraInput.Sad, setAvatarExpression)
 
-  map.set(BaseInput.CAMERA_SCROLL, changeCameraDistanceByDelta)
+  map.set(BaseInput.LOOKTURN_PLAYERONE, lookByInputAxis)
   map.set(BaseInput.MOVEMENT_PLAYERONE, moveByInputAxis)
-  map.set(BaseInput.GAMEPAD_STICK_LEFT, lookByInputAxis)
-  map.set(BaseInput.GAMEPAD_STICK_RIGHT, lookByInputAxis)
+  map.set(BaseInput.GAMEPAD_STICK_LEFT, gamepadLook)
+  map.set(BaseInput.GAMEPAD_STICK_RIGHT, gamepadLook)
   map.set(BaseInput.XR_AXIS_LOOK, lookFromXRInputs)
   map.set(BaseInput.XR_AXIS_MOVE, moveFromXRInputs)
 
-  map.set(BaseInput.PRIMARY, clickNavMesh)
+  map.set(BaseInput.SWITCH_CAMERA, cycleCameraMode)
+  map.set(BaseInput.LOCKING_CAMERA, fixedCameraBehindAvatar)
+  map.set(BaseInput.SWITCH_SHOULDER_SIDE, switchShoulderSide)
+  map.set(BaseInput.CAMERA_SCROLL, throttle(changeCameraDistanceByDelta, 30, { leading: true, trailing: false }))
+
+  map.set(BaseInput.PRIMARY, handlePrimaryButton)
 
   return map
 }
 
 export const AvatarInputSchema: InputSchema = {
-  onAdded: [],
-  onRemove: [resetAvatarInput],
   inputMap: createAvatarInput(),
   behaviorMap: createBehaviorMap()
 }

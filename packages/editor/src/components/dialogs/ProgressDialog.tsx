@@ -1,5 +1,4 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import Dialog from './Dialog'
 import ProgressBar from '../inputs/ProgressBar'
 import styled from 'styled-components'
@@ -43,38 +42,18 @@ const ProgressMessage = (styled as any).div`
  * @param       {any} props
  * @constructor
  */
-export function ProgressDialog({ message, onConfirm, cancelable, onCancel, ...props }) {
+export function ProgressDialog(props) {
+  if (!props) return null
   return (
-    <Dialog onCancel={cancelable ? onCancel : null} {...props}>
+    <Dialog onCancel={props.cancelable ? props.onCancel : null} {...props}>
       <ProgressContainer>
-        <ProgressMessage>{message}</ProgressMessage>
+        <ProgressMessage>{props.message}</ProgressMessage>
         <ProgressBar />
       </ProgressContainer>
     </Dialog>
   )
 }
 
-/**
- * declaring propTypes for ProgressDialog.
- *
- * @author Robert Long
- * @type {Object}
- */
-ProgressDialog.propTypes = {
-  title: PropTypes.string.isRequired,
-  message: PropTypes.string.isRequired,
-  cancelable: PropTypes.bool,
-  cancelLabel: PropTypes.string,
-  onCancel: PropTypes.func,
-  onConfirm: PropTypes.func
-}
-
-/**
- * initializing defaultProps for ProgressDialog.
- *
- * @author Robert Long
- * @type {Object}
- */
 ProgressDialog.defaultProps = {
   title: i18n.t('editor:dialog.progress.title') || 'Loading...',
   message: i18n.t('editor:dialog.progress.message') || 'Loading...',

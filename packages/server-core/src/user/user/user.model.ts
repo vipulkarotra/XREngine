@@ -4,7 +4,7 @@ import { Application } from '../../../declarations'
 /**
  * This model contain users information
  */
-export default (app: Application): any => {
+export default (app: Application) => {
   const sequelizeClient: Sequelize = app.get('sequelizeClient')
   const User = sequelizeClient.define(
     'user',
@@ -45,7 +45,6 @@ export default (app: Application): any => {
     ;(User as any).belongsTo(models.instance, { foreignKey: { name: 'channelInstanceId', allowNull: true } })
     ;(User as any).hasOne(models.user_settings)
     ;(User as any).belongsTo(models.party, { through: 'party_user' }) // user can only be part of one party at a time
-    ;(User as any).hasMany(models.collection)
     ;(User as any).belongsToMany(models.user, {
       as: 'relatedUser',
       through: models.user_relationship
@@ -64,6 +63,11 @@ export default (app: Application): any => {
     ;(User as any).hasMany(models.location_ban)
     ;(User as any).hasMany(models.bot, { foreignKey: 'userId' })
     ;(User as any).hasMany(models.scope, { foreignKey: 'userId' })
+    ;(User as any).belongsToMany(models.inventory_item, { through: models.user_inventory, foreignKey: 'userId' })
+    ;(User as any).hasMany(models.user_trade, { foreignKey: 'fromUserId', required: true })
+    ;(User as any).hasMany(models.user_trade, { foreignKey: 'toUserId', required: true })
+    ;(User as any).belongsToMany(models.instance, { through: 'instance_authorized_user' })
+    ;(User as any).hasOne(models.user_api_key)
   }
 
   return User

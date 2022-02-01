@@ -1,61 +1,48 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import Drawer from '@material-ui/core/Drawer'
-import { useLocationStyles, useLocationStyle } from './styles'
-import Paper from '@material-ui/core/Paper'
-import Container from '@material-ui/core/Container'
-import Typography from '@material-ui/core/Typography'
-import Chip from '@material-ui/core/Chip'
-import Avatar from '@material-ui/core/Avatar'
-import Grid from '@material-ui/core/Grid'
-import DialogActions from '@material-ui/core/DialogActions'
-import Button from '@material-ui/core/Button'
-import InputBase from '@material-ui/core/InputBase'
-import { Edit, Save } from '@material-ui/icons'
-import FormControl from '@material-ui/core/FormControl'
-import FormControlLabel from '@material-ui/core/FormControlLabel'
-import MenuItem from '@material-ui/core/MenuItem'
-import Select from '@material-ui/core/Select'
-import FormGroup from '@material-ui/core/FormGroup'
-import Switch from '@material-ui/core/Switch'
-import { selectAdminSceneState } from '../../reducers/admin/scene/selector'
-import { connect } from 'react-redux'
-import { selectAdminLocationState } from '../../reducers/admin/location/selector'
-import { formValid } from '../Users/validation'
-import { patchLocation } from '../../reducers/admin/location/service'
-import { bindActionCreators, Dispatch } from 'redux'
-import MuiAlert from '@material-ui/lab/Alert'
-import Snackbar from '@material-ui/core/Snackbar'
+import Drawer from '@mui/material/Drawer'
+import { useStyles } from '../../styles/ui'
+import Paper from '@mui/material/Paper'
+import Container from '@mui/material/Container'
+import Typography from '@mui/material/Typography'
+import Chip from '@mui/material/Chip'
+import Avatar from '@mui/material/Avatar'
+import Grid from '@mui/material/Grid'
+import DialogActions from '@mui/material/DialogActions'
+import Button from '@mui/material/Button'
+import InputBase from '@mui/material/InputBase'
+import { Edit, Save } from '@mui/icons-material'
+import FormControl from '@mui/material/FormControl'
+import FormControlLabel from '@mui/material/FormControlLabel'
+import MenuItem from '@mui/material/MenuItem'
+import Select from '@mui/material/Select'
+import FormGroup from '@mui/material/FormGroup'
+import Switch from '@mui/material/Switch'
+import { useSceneState } from '../../services/SceneService'
+import { useDispatch } from '../../../store'
+import { useLocationState } from '../../services/LocationService'
+import { validateUserForm } from '../Users/validation'
+import { LocationService } from '../../services/LocationService'
+import MuiAlert from '@mui/material/Alert'
+import Snackbar from '@mui/material/Snackbar'
+import { useAuthState } from '../../../user/services/AuthService'
+import AlertMessage from '../../common/AlertMessage'
 
 interface Props {
   openView: any
   closeViewModel: any
   locationAdmin: any
-  adminSceneState?: any
-  adminLocationState?: any
-  patchLocation?: any
+  authState?: any
 }
-
-const mapStateToProps = (state: any): any => {
-  return {
-    adminSceneState: selectAdminSceneState(state),
-    adminLocationState: selectAdminLocationState(state)
-  }
-}
-
-const mapDispatchToProps = (dispatch: Dispatch): any => ({
-  patchLocation: bindActionCreators(patchLocation, dispatch)
-})
 
 const Alert = (props) => {
   return <MuiAlert elevation={6} variant="filled" {...props} />
 }
 
 const ViewLocation = (props: Props) => {
-  const { openView, closeViewModel, adminSceneState, adminLocationState, patchLocation, locationAdmin } = props
-  console.log(locationAdmin)
-  const classex = useLocationStyle()
-  const classes = useLocationStyles()
+  const { openView, closeViewModel, locationAdmin } = props
+  const dispatch = useDispatch()
+  const classes = useStyles()
   const [editMode, setEditMode] = React.useState(false)
   const [state, setState] = React.useState({
     name: '',
@@ -80,8 +67,18 @@ const ViewLocation = (props: Props) => {
   const [error, setError] = React.useState('')
   const [openWarning, setOpenWarning] = React.useState(false)
   const { t } = useTranslation()
-  const adminScenes = adminSceneState.get('scenes').get('scenes')
-  const locationTypes = adminLocationState.get('locationTypes').get('locationTypes')
+  const adminScenes = useSceneState().scenes
+  const locationTypes = useLocationState().locationTypes
+  const user = useAuthState().user // user initialized by getting value from authState object.
+  const scopes = user?.scopes?.value || []
+  let isLocationWrite = false
+
+  for (const scope of scopes) {
+    if (scope.type.split(':')[0] === 'location' && scope.type.split(':')[1] === 'write') {
+      isLocationWrite = true
+      break
+    }
+  }
 
   React.useEffect(() => {
     if (locationAdmin) {
@@ -156,8 +153,8 @@ const ViewLocation = (props: Props) => {
       temp.scene = "Type can't be empty"
     }
     setState({ ...state, formErrors: temp })
-    if (formValid(state, state.formErrors)) {
-      patchLocation(location.id, locationData)
+    if (validateUserForm(state, state.formErrors)) {
+      LocationService.patchLocation(location.id, locationData)
       setState({
         ...state,
         name: '',
@@ -173,7 +170,7 @@ const ViewLocation = (props: Props) => {
     }
   }
 
-  const handleCloseWarning = (event, reason) => {
+  const handleCloseWarning = (event?: React.SyntheticEvent | Event, reason?: string) => {
     if (reason === 'clickaway') {
       return
     }
@@ -189,35 +186,42 @@ const ViewLocation = (props: Props) => {
 
   return (
     <React.Fragment>
-      <Drawer anchor="right" open={openView} onClose={() => handleCloseDrawe()} classes={{ paper: classex.paper }}>
+      <Drawer
+        anchor="right"
+        open={openView}
+        onClose={() => handleCloseDrawe()}
+        classes={{ paper: classes.paperDrawer }}
+      >
         <Paper elevation={0} className={classes.rootPaper}>
-          <Container maxWidth="sm">
-            <div className={classes.locationTitle}>
-              <Typography variant="h4" component="span">
-                {location?.name}
-              </Typography>
-            </div>
-            <div className={classes.locationSubTitle}>
-              {location.isFeatured && (
-                <Chip
-                  style={{ marginLeft: '5px' }}
-                  avatar={<Avatar>F</Avatar>}
-                  label={t('admin:components.index.featured')}
-                  //  onClick={handleClick}
-                />
-              )}
-              {location.isLobby && <Chip avatar={<Avatar>L</Avatar>} label={t('admin:components.index.lobby')} />}
-              {/* <Paper className={classes.smpd} elevation={0}>
+          {location && (
+            <Container maxWidth="sm">
+              <div className={classes.locationTitle}>
+                <Typography variant="h4" component="span">
+                  {location?.name}
+                </Typography>
+              </div>
+              <div className={classes.locationSubTitle}>
+                {location.isFeatured && (
+                  <Chip
+                    style={{ marginLeft: '5px' }}
+                    avatar={<Avatar>F</Avatar>}
+                    label={t('admin:components.index.featured')}
+                    //  onClick={handleClick}
+                  />
+                )}
+                {location.isLobby && <Chip avatar={<Avatar>L</Avatar>} label={t('admin:components.index.lobby')} />}
+                {/* <Paper className={classes.smpd} elevation={0}>
                         <Typography variant="h6" component="span" >{location.createdAt ? `Created At: ${location.createdAt.slice(0, 10)}`:""}</Typography>
                         </Paper> */}
-            </div>
-          </Container>
+              </div>
+            </Container>
+          )}
         </Paper>
 
         {editMode ? (
           <Container maxWidth="sm">
             <div className={classes.mt10}>
-              <Typography variant="h4" component="h4" className={classes.mb10}>
+              <Typography variant="h4" component="h4" className={`${classes.mb10} ${classes.headingFont}`}>
                 {' '}
                 Update location Information{' '}
               </Typography>
@@ -252,7 +256,6 @@ const ViewLocation = (props: Props) => {
                   onChange={handleInputChange}
                 />
               </Paper>
-
               <label>Scene</label>
               <Paper
                 component="div"
@@ -268,13 +271,13 @@ const ViewLocation = (props: Props) => {
                     onChange={handleInputChange}
                     className={classes.select}
                     name="scene"
-                    MenuProps={{ classes: { paper: classex.selectPaper } }}
+                    MenuProps={{ classes: { paper: classes.selectPaper } }}
                   >
                     <MenuItem value="" disabled>
                       <em>Select scene</em>
                     </MenuItem>
-                    {adminScenes.map((el) => (
-                      <MenuItem value={el.sid} key={el.sid}>{`${el.name} (${el.sid})`}</MenuItem>
+                    {adminScenes.value.map((el, index) => (
+                      <MenuItem value={`${el.project}/${el.name}`} key={index}>{`${el.name} (${el.project})`}</MenuItem>
                     ))}
                   </Select>
                 </FormControl>
@@ -291,13 +294,13 @@ const ViewLocation = (props: Props) => {
                     onChange={handleInputChange}
                     className={classes.select}
                     name="type"
-                    MenuProps={{ classes: { paper: classex.selectPaper } }}
+                    MenuProps={{ classes: { paper: classes.selectPaper } }}
                   >
                     <MenuItem value="" disabled>
                       <em>Select type</em>
                     </MenuItem>
-                    {locationTypes.map((el) => (
-                      <MenuItem value={el.type} key={el.type}>
+                    {locationTypes.value.map((el, index) => (
+                      <MenuItem value={el.type} key={index}>
                         {el.type}
                       </MenuItem>
                     ))}
@@ -317,7 +320,7 @@ const ViewLocation = (props: Props) => {
                             name="videoEnabled"
                           />
                         }
-                        label={t('admin:components.locationModel.lbl-ve')}
+                        label={t('admin:components.locationModel.lbl-ve') as string}
                       />
                     </FormControl>
                   </FormGroup>
@@ -332,7 +335,7 @@ const ViewLocation = (props: Props) => {
                             name="audioEnabled"
                           />
                         }
-                        label={t('admin:components.locationModel.lbl-ae')}
+                        label={t('admin:components.locationModel.lbl-ae') as string}
                       />
                     </FormControl>
                   </FormGroup>
@@ -347,7 +350,7 @@ const ViewLocation = (props: Props) => {
                             name="globalMediaEnabled"
                           />
                         }
-                        label={t('admin:components.locationModel.lbl-gme')}
+                        label={t('admin:components.locationModel.lbl-gme') as string}
                       />
                     </FormControl>
                   </FormGroup>
@@ -362,12 +365,12 @@ const ViewLocation = (props: Props) => {
                             name="screenSharingEnabled"
                           />
                         }
-                        label={t('admin:components.locationModel.lbl-se')}
+                        label={t('admin:components.locationModel.lbl-se') as string}
                       />
                     </FormControl>
                   </FormGroup>
                 </Grid>
-                <Grid item xs={6} style={{ display: 'flex' }}>
+                <Grid item xs={6}>
                   <div style={{ marginLeft: 'auto' }}>
                     <FormGroup>
                       <FormControl>
@@ -380,7 +383,7 @@ const ViewLocation = (props: Props) => {
                               name="faceStreamingEnabled"
                             />
                           }
-                          label={t('admin:components.locationModel.lbl-fe')}
+                          label={t('admin:components.locationModel.lbl-fe') as string}
                         />
                       </FormControl>
                     </FormGroup>
@@ -395,7 +398,7 @@ const ViewLocation = (props: Props) => {
                               name="isLobby"
                             />
                           }
-                          label={t('admin:components.locationModel.lbl-lobby')}
+                          label={t('admin:components.locationModel.lbl-lobby') as string}
                         />
                       </FormControl>
                     </FormGroup>
@@ -410,7 +413,7 @@ const ViewLocation = (props: Props) => {
                               name="isFeatured"
                             />
                           }
-                          label={t('admin:components.locationModel.lbl-featured')}
+                          label={t('admin:components.locationModel.lbl-featured') as string}
                         />
                       </FormControl>
                     </FormGroup>
@@ -424,7 +427,7 @@ const ViewLocation = (props: Props) => {
             {' '}
             <Paper elevation={3} className={classes.middlePaper}>
               <Grid container spacing={2} className={classes.pdl}>
-                <Grid item xs={6} className={classes.typo}>
+                <Grid item xs={5} className={classes.typo}>
                   <Typography variant="h5" component="h5" className={`${classes.locationOtherInfo} ${classes.mb}`}>
                     Max Users
                   </Typography>
@@ -435,8 +438,8 @@ const ViewLocation = (props: Props) => {
                     Slugy Name
                   </Typography>
                 </Grid>
-                <Grid item xs={6} className={classes.typo}>
-                  <Typography variant="h6" component="h5" className={`${classes.locationOtherInfo} ${classes.mb}`}>
+                <Grid item xs={7} className={classes.typo}>
+                  <Typography variant="h5" component="h5" className={`${classes.locationOtherInfo} ${classes.mb}`}>
                     {(location as any)?.maxUsersPerInstance || <span className={classes.spanNone}>None</span>}
                   </Typography>
                   <Typography variant="h5" component="h5" className={`${classes.locationOtherInfo} ${classes.mb}`}>
@@ -448,7 +451,11 @@ const ViewLocation = (props: Props) => {
                 </Grid>
               </Grid>
             </Paper>
-            <Typography variant="h4" component="h4" className={`${classes.mb20px} ${classes.spacing}`}>
+            <Typography
+              variant="h4"
+              component="h4"
+              className={`${classes.mb20px} ${classes.spacing} ${classes.typoFont}`}
+            >
               Location Settings{' '}
             </Typography>
             <Grid container spacing={2} className={classes.pdlarge}>
@@ -524,6 +531,7 @@ const ViewLocation = (props: Props) => {
           ) : (
             <div className={classes.marginTpM}>
               <Button
+                disabled={!isLocationWrite}
                 className={classes.saveBtn}
                 onClick={() => {
                   setEditMode(true)
@@ -537,20 +545,10 @@ const ViewLocation = (props: Props) => {
             </div>
           )}
         </DialogActions>
-        <Snackbar
-          open={openWarning}
-          autoHideDuration={6000}
-          onClose={handleCloseWarning}
-          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-        >
-          <Alert onClose={handleCloseWarning} severity="warning">
-            {' '}
-            {error}{' '}
-          </Alert>
-        </Snackbar>
+        <AlertMessage open={openWarning} handleClose={handleCloseWarning} severity="warning" message={error} />
       </Drawer>
     </React.Fragment>
   )
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(ViewLocation)
+export default ViewLocation

@@ -1,59 +1,28 @@
-import EmoteMenu from '@xrengine/client-core/src/common/components/EmoteMenu'
-import LoadingScreen from '@xrengine/client-core/src/common/components/Loader'
-import UserMenu from '@xrengine/client-core/src/user/components/UserMenu'
-import { InteractableModal } from '@xrengine/client-core/src/world/components/InteractableModal'
-import React, { useState } from 'react'
-import World, { EngineCallbacks } from '../../components/World/index'
+import React from 'react'
 import { useTranslation } from 'react-i18next'
-import InstanceChat from '../../components/InstanceChat'
-import Layout from '../../components/Layout/Layout'
-import MediaIconsBox from '../../components/MediaIconsBox'
-import { AvatarUISystem } from '@xrengine/client-core/src/systems/AvatarUISystem'
-import { SystemUpdateType } from '@xrengine/engine/src/ecs/functions/SystemUpdateType'
-import { InitializeOptions } from '@xrengine/engine/src/initializationOptions'
-import { XRUISystem } from '@xrengine/engine/src/xrui/systems/XRUISystem'
+import Layout from '@xrengine/client-core/src/components/Layout/Layout'
+import { LoadEngineWithScene } from '@xrengine/client-core/src/components/World/LoadEngineWithScene'
+import LoadLocationScene from '@xrengine/client-core/src/components/World/LoadLocationScene'
+import NetworkInstanceProvisioning from '@xrengine/client-core/src/components/World/NetworkInstanceProvisioning'
+import { useEngineState } from '@xrengine/engine/src/ecs/classes/EngineService'
+import { LoadingCircle } from '@xrengine/client-core/src/components/LoadingCircle'
 
-const LocationPage = (props) => {
-  const [loadingItemCount, setLoadingItemCount] = useState(99)
+interface Props {
+  match?: any
+}
+
+const LocationPage = (props: Props) => {
   const { t } = useTranslation()
-
-  const onSceneLoadProgress = (loadingItemCount: number): void => {
-    setLoadingItemCount(loadingItemCount || 0)
-  }
-
-  const engineInitializeOptions: InitializeOptions = {
-    systems: [
-      {
-        type: SystemUpdateType.Free,
-        system: AvatarUISystem,
-        after: XRUISystem
-      }
-    ]
-  }
-
-  const engineCallbacks: EngineCallbacks = {
-    onSceneLoadProgress,
-    onSceneLoaded: () => setLoadingItemCount(0)
-  }
+  const params = props?.match?.params!
+  const locationName = params.locationName ?? `${params.projectName}/${params.sceneName}`
+  const engineState = useEngineState()
 
   return (
-    <Layout pageTitle={t('location.locationName.pageTitle')}>
-      <LoadingScreen objectsToLoad={loadingItemCount} />
-      <World
-        allowDebug={true}
-        locationName={props.match.params.locationName}
-        history={props.history}
-        engineCallbacks={engineCallbacks}
-        engineInitializeOptions={engineInitializeOptions}
-        showTouchpad
-      >
-        <InteractableModal />
-        {/* <RecordingApp /> */}
-        <MediaIconsBox />
-        <UserMenu />
-        <EmoteMenu />
-        <InstanceChat />
-      </World>
+    <Layout useLoadingScreenOpacity pageTitle={t('location.locationName.pageTitle')}>
+      {engineState.isEngineInitialized.value || <LoadingCircle />}
+      <LoadEngineWithScene />
+      <NetworkInstanceProvisioning locationName={locationName} />
+      <LoadLocationScene locationName={props.match.params.locationName} />
     </Layout>
   )
 }

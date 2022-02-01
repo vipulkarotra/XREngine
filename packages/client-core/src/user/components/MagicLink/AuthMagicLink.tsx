@@ -1,44 +1,30 @@
 import React, { useEffect } from 'react'
 import { useLocation, withRouter } from 'react-router-dom'
-import { loginUserByJwt, refreshConnections, verifyEmail, resetPassword } from '../../reducers/auth/service'
-import { Dispatch, bindActionCreators } from 'redux'
-import { connect } from 'react-redux'
-import Box from '@material-ui/core/Box'
-import Typography from '@material-ui/core/Typography'
-import Container from '@material-ui/core/Container'
+import { AuthService } from '../../services/AuthService'
+import Box from '@mui/material/Box'
+import Typography from '@mui/material/Typography'
+import Container from '@mui/material/Container'
 import ResetPassword from '../Auth/ResetPassword'
 import { VerifyEmail } from '../Auth/VerifyEmail'
-import { User } from '@xrengine/common/src/interfaces/User'
 import { useTranslation } from 'react-i18next'
-
+import { useAuthState } from '../../services/AuthService'
 interface Props {
   auth: any
-  verifyEmail: typeof verifyEmail
-  resetPassword: typeof resetPassword
-  loginUserByJwt: typeof loginUserByJwt
-  refreshConnections: typeof refreshConnections
   type: string
   token: string
 }
 
-const mapDispatchToProps = (dispatch: Dispatch): any => ({
-  verifyEmail: bindActionCreators(verifyEmail, dispatch),
-  resetPassword: bindActionCreators(resetPassword, dispatch),
-  loginUserByJwt: bindActionCreators(loginUserByJwt, dispatch),
-  refreshConnections: bindActionCreators(refreshConnections, dispatch)
-})
-
 const AuthMagicLink = (props: Props): any => {
-  const { auth, loginUserByJwt, refreshConnections, token, type } = props
+  const { auth, token, type } = props
   const { t } = useTranslation()
 
   useEffect(() => {
     if (type === 'login') {
-      loginUserByJwt(token, '/', '/')
+      AuthService.loginUserByJwt(token, '/', '/')
     } else if (type === 'connection') {
-      const user = auth.get('user') as User
-      if (user) {
-        refreshConnections(user.id)
+      const user = useAuthState().user
+      if (user !== null) {
+        AuthService.refreshConnections(user.id.value!)
       }
       window.location.href = '/profile-connections'
     }
@@ -60,12 +46,16 @@ const AuthMagicLinkWrapper = (props: any): any => {
   const token = search.get('token') as string
   const type = search.get('type') as string
 
+  const handleResetPassword = (token: string, password: string): any => {
+    AuthService.resetPassword(token, password)
+  }
+
   if (type === 'verify') {
     return <VerifyEmail {...props} type={type} token={token} />
   } else if (type === 'reset') {
-    return <ResetPassword {...props} type={type} token={token} />
+    return <ResetPassword resetPassword={handleResetPassword} type={type} token={token} />
   }
   return <AuthMagicLink {...props} token={token} type={type} />
 }
 
-export default withRouter(connect(null, mapDispatchToProps)(AuthMagicLinkWrapper))
+export default withRouter(AuthMagicLinkWrapper)

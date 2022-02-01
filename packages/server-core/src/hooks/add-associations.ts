@@ -15,6 +15,7 @@ function processInclude(includeCollection: any, context: HookContext): any {
 
 export default (options = {}): any => {
   return (context: any): any => {
+    if (!context.params) context.params = {}
     try {
       const sequelize = context.params.sequelize || {}
       const include = sequelize.include || []
@@ -25,7 +26,6 @@ export default (options = {}): any => {
           return newModel
         })
       )
-
       sequelize.raw = false
       context.params.sequelize = sequelize
       return context

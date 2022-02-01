@@ -1,11 +1,14 @@
-import React, { Component, createRef } from 'react'
-import PropTypes from 'prop-types'
+import React, { useRef, ReactNode } from 'react'
 import Portal from '../layout/Portal'
-import { getStepSize, toPrecision } from '@xrengine/editor/src/functions/utils'
+import { getStepSize, toPrecision } from '../../functions/utils'
 import styled from 'styled-components'
-import { ArrowsAltH } from '@styled-icons/fa-solid/ArrowsAltH'
 import Overlay from '../layout/Overlay'
 import { clamp } from '@xrengine/engine/src/common/functions/MathLerpFunctions'
+import {} from 'react'
+import { useState } from 'react'
+import { useEffect } from 'react'
+import { useHookstate } from '@speigg/hookstate'
+import MultipleStopIcon from '@mui/icons-material/MultipleStop'
 
 /**
  *
@@ -20,7 +23,7 @@ const ScrubberContainer = (styled as any).div`
  *
  * @author Robert Long
  */
-const Cursor = (styled as any)(ArrowsAltH).attrs(({ x, y }) => ({
+const Cursor = (styled as any)(MultipleStopIcon).attrs(({ x, y }) => ({
   style: {
     transform: `translate(${x}px,${y}px)`
   }
@@ -35,142 +38,144 @@ const Cursor = (styled as any)(ArrowsAltH).attrs(({ x, y }) => ({
   }
 `
 
+type ScrubberProp = {
+  tag?: any
+  children?: ReactNode
+  smallStep?: number
+  mediumStep?: number
+  largeStep?: number
+  sensitivity?: number
+  min?: number
+  max?: number
+  precision?: number
+  convertFrom?: any
+  convertTo?: any
+  value?: any
+  onChange: Function
+  onCommit?: Function
+}
+
 /**
  *
  * @author Robert Long
  */
-class Scrubber extends Component {
-  static propTypes = {
-    tag: PropTypes.string,
-    children: PropTypes.node,
-    className: PropTypes.string,
-    smallStep: PropTypes.number.isRequired,
-    mediumStep: PropTypes.number.isRequired,
-    largeStep: PropTypes.number.isRequired,
-    sensitivity: PropTypes.number.isRequired,
-    min: PropTypes.number.isRequired,
-    max: PropTypes.number.isRequired,
-    precision: PropTypes.number,
-    value: PropTypes.number.isRequired,
-    onChange: PropTypes.func.isRequired,
-    onCommit: PropTypes.func,
-    convertFrom: PropTypes.func.isRequired,
-    convertTo: PropTypes.func.isRequired
-  }
-  static defaultProps = {
-    tag: 'label',
-    smallStep: 0.025,
-    mediumStep: 0.1,
-    largeStep: 0.25,
-    sensitivity: 5,
-    min: -Infinity,
-    max: Infinity,
-    convertFrom: (value) => value,
-    convertTo: (value) => value
-  }
-  constructor(props) {
-    super(props)
-    this.scrubberEl = createRef()
-    this.state = { isDragging: false, startValue: null, delta: null, mouseX: null, mouseY: null }
-  }
+const Scrubber = (props: ScrubberProp) => {
+  const state = useHookstate({
+    isDragging: false,
+    startValue: null as number | null,
+    delta: null as number | null,
+    mouseX: null,
+    mouseY: null
+  })
 
-  componentWillUnmount() {
-    window.removeEventListener('mousemove', this.handleMouseMove)
-    window.removeEventListener('mouseup', this.handleMouseUp)
-  }
+  const scrubberEl = useRef<HTMLElement>(null)
 
-  scrubberEl: React.RefObject<unknown>
+  const handleMouseMove = (event) => {
+    const { smallStep, mediumStep, largeStep, sensitivity, min, max, precision, convertTo, onChange } = props
 
-  handleMouseMove = (event) => {
-    const state = this.state as any
-    const { smallStep, mediumStep, largeStep, sensitivity, min, max, precision, convertTo, onChange } = this
-      .props as any
-
-    if (state.isDragging) {
-      const mouseX = state.mouseX + event.movementX
-      const mouseY = state.mouseY + event.movementY
-      const nextDelta = state.delta + event.movementX
+    if (state.isDragging.value) {
+      const mX = state.mouseX.value + event.movementX
+      const mY = state.mouseY.value + event.movementY
+      const nextDelta = state.delta.value + event.movementX
       const stepSize = getStepSize(event, smallStep, mediumStep, largeStep)
-      const nextValue = state.startValue + Math.round(nextDelta / sensitivity) * stepSize
-      const clampedValue = clamp(nextValue, min, max)
+      const nextValue = (state.startValue.value as number) + Math.round(nextDelta / (sensitivity || 1)) * stepSize
+      const clampedValue = min != null && max != null ? clamp(nextValue, min, max) : nextValue
       const roundedValue = precision ? toPrecision(clampedValue, precision) : clampedValue
       const finalValue = convertTo(roundedValue)
       onChange(finalValue)
-      this.setState({ ...state, delta: nextDelta, mouseX, mouseY })
+
+      state.delta.set(nextDelta)
+      state.mouseX.set(mX)
+      state.mouseY.set(mY)
     }
   }
 
-  handleMouseDown = (event) => {
-    const { convertFrom, value } = this.props as any
+  const handleMouseUp = () => {
+    const { onCommit, value } = props
 
-    this.setState({
-      isDragging: true,
-      startValue: convertFrom(value),
-      delta: 0,
-      mouseX: event.clientX,
-      mouseY: event.clientY
-    })
-    ;(this.scrubberEl.current as any).requestPointerLock()
-
-    window.addEventListener('mousemove', this.handleMouseMove)
-    window.addEventListener('mouseup', this.handleMouseUp)
-  }
-
-  handleMouseUp = () => {
-    const { onCommit, onChange, value } = this.props as any
-    const state = this.state as any
-
-    if (state.isDragging) {
-      this.setState({ isDragging: false, startValue: null, delta: null, mouseX: null, mouseY: null })
+    if (state.isDragging.value) {
+      state.isDragging.set(false)
+      state.startValue.set(null)
+      state.delta.set(null)
+      state.mouseX.set(null)
+      state.mouseY.set(null)
 
       if (onCommit) {
         onCommit(value)
-      } else {
-        onChange(value)
       }
 
       document.exitPointerLock()
     }
 
-    window.removeEventListener('mousemove', this.handleMouseMove)
-    window.removeEventListener('mouseup', this.handleMouseUp)
+    window.removeEventListener('mousemove', handleMouseMove)
+    window.removeEventListener('mouseup', handleMouseUp)
   }
 
-  render() {
-    const {
-      tag,
-      children,
-      smallStep,
-      mediumStep,
-      largeStep,
-      sensitivity,
-      min,
-      max,
-      precision,
-      convertFrom,
-      convertTo,
-      value,
-      onChange,
-      onCommit,
-      ...rest
-    } = this.props as any
+  useEffect(() => {
+    window.removeEventListener('mousemove', handleMouseMove)
+    window.removeEventListener('mouseup', handleMouseUp)
+  }, [])
 
-    const { isDragging, mouseX, mouseY } = this.state as any
+  const handleMouseDown = (event) => {
+    const { convertFrom, value } = props
 
-    return (
-      <ScrubberContainer as={tag} ref={this.scrubberEl} onMouseDown={this.handleMouseDown} {...rest}>
-        {children}
-        {isDragging && (
-          <Portal>
-            <Overlay pointerEvents="none">
-              <Cursor x={mouseX} y={mouseY} />
-            </Overlay>
-          </Portal>
-        )}
-      </ScrubberContainer>
-    )
+    state.isDragging.set(true)
+    state.startValue.set(convertFrom(value))
+    state.delta.set(0)
+    state.mouseX.set(event.clientX)
+    state.mouseY.set(event.clientY)
+
+    scrubberEl?.current?.requestPointerLock()
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
   }
+
+  const {
+    tag,
+    children,
+    smallStep,
+    mediumStep,
+    largeStep,
+    sensitivity,
+    min,
+    max,
+    precision,
+    convertFrom,
+    convertTo,
+    value,
+    onChange,
+    onCommit,
+    ...rest
+  } = props
+
+  return (
+    <ScrubberContainer as={tag} ref={scrubberEl} onMouseDown={handleMouseDown} {...rest}>
+      {children}
+      {state.isDragging.value && (
+        <Portal>
+          <Overlay pointerEvents="none">
+            <Cursor x={state.mouseX.value} y={state.mouseY.value} />
+          </Overlay>
+        </Portal>
+      )}
+    </ScrubberContainer>
+  )
 }
+
+Scrubber.defaultProps = {
+  tag: 'label',
+  style: {},
+  smallStep: 0.025,
+  mediumStep: 0.1,
+  largeStep: 0.25,
+  sensitivity: 5,
+  min: -Infinity,
+  max: Infinity,
+  convertFrom: (value) => value,
+  convertTo: (value) => value
+}
+
 /**
  *
  * @author Robert Long

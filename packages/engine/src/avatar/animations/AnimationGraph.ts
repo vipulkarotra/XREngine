@@ -1,19 +1,17 @@
 import { Vector2 } from 'three'
+import { Engine } from '../../ecs/classes/Engine'
 import { Entity } from '../../ecs/classes/Entity'
-import { getComponent } from '../../ecs/functions/EntityFunctions'
-import { Network } from '../../networking/classes/Network'
-import { Commands } from '../../networking/enums/Commands'
+import { getComponent } from '../../ecs/functions/ComponentFunctions'
+import { dispatchFrom } from '../../networking/functions/dispatchFrom'
 import { isEntityLocalClient } from '../../networking/functions/isEntityLocalClient'
-import { convertObjToBufferSupportedString } from '../../networking/functions/jsonSerialize'
+import { NetworkWorldAction } from '../../networking/functions/NetworkWorldAction'
 import { VelocityComponent } from '../../physics/components/VelocityComponent'
-import { AvatarSettings } from '../AvatarControllerSystem'
 import { AnimationComponent } from '../components/AnimationComponent'
 import { AvatarAnimationComponent } from '../components/AvatarAnimationComponent'
 import { AvatarComponent } from '../components/AvatarComponent'
-import { AvatarControllerComponent } from '../components/AvatarControllerComponent'
 import { AnimationRenderer } from './AnimationRenderer'
 import { AnimationState } from './AnimationState'
-import { AnimationType, WeightsParameterType, AvatarStates, MovementType } from './Util'
+import { AnimationType, AvatarStates, MovementType, WeightsParameterType } from './Util'
 
 const vector2 = new Vector2()
 
@@ -140,7 +138,7 @@ export class AnimationGraph {
   render = (entity: Entity, delta: number): void => {
     const avatarAnimationComponent = getComponent(entity, AvatarAnimationComponent)
     const avatar = getComponent(entity, AvatarComponent)
-    let params: WeightsParameterType = {}
+    let params: WeightsParameterType = {} as any
 
     // Calculate movement fo the avatar for this frame
     const velocity = getComponent(entity, VelocityComponent)
@@ -158,8 +156,8 @@ export class AnimationGraph {
     if (!avatar.isGrounded) {
       if (avatarAnimationComponent.currentState.name !== AvatarStates.JUMP) {
         avatarAnimationComponent.animationGraph.transitionState(entity, AvatarStates.JUMP, {
-          forceTransition: true,
-          ...params
+          ...params,
+          forceTransition: true
         })
       }
       // else, idle fall
@@ -168,10 +166,15 @@ export class AnimationGraph {
       vector2.set(movement.velocity.x, movement.velocity.z).multiplyScalar(1 / delta)
       const speedSqr = vector2.lengthSq()
       if (speedSqr > this.EPSILON) {
-        newStateName =
-          speedSqr < AvatarSettings.instance.walkSpeed * AvatarSettings.instance.walkSpeed
-            ? AvatarStates.WALK
-            : AvatarStates.RUN
+        // TODO: The transition between walk and run animations is not smooth
+        // Most probably because they're not in sync with each other and a very short transition time
+
+        // newStateName =
+        //   speedSqr < AvatarSettings.instance.walkSpeed * AvatarSettings.instance.walkSpeed
+        //     ? AvatarStates.WALK
+        //     : AvatarStates.RUN
+
+        newStateName = AvatarStates.RUN
       } else {
         newStateName = AvatarStates.IDLE
       }
@@ -184,7 +187,7 @@ export class AnimationGraph {
 
     if (avatarAnimationComponent.currentState.type === AnimationType.VELOCITY_BASED) {
       // update weights based on velocity of the character
-      avatarAnimationComponent.currentState.updateWeights()
+      avatarAnimationComponent.currentState.updateWeights?.()
     }
 
     // Set velocity as prev velocity
@@ -201,13 +204,7 @@ export class AnimationGraph {
     const avatarAnimationComponent = getComponent(entity, AvatarAnimationComponent)
     // Send change animation commnad over network for the local client entity
     if (isEntityLocalClient(entity) && avatarAnimationComponent.currentState.type === AnimationType.STATIC) {
-      Network.instance.clientInputState.commands.push({
-        type: Commands.CHANGE_ANIMATION_STATE,
-        args: convertObjToBufferSupportedString({
-          state: newStateName,
-          params
-        })
-      })
+      dispatchFrom(Engine.userId, () => NetworkWorldAction.avatarAnimation({ newStateName, params }))
     }
   }
 
@@ -232,6 +229,6 @@ export class AnimationGraph {
     }
 
     // Update weights of the state
-    avatarAnimationComponent.currentState.updateWeights()
+    avatarAnimationComponent.currentState.updateWeights?.()
   }
 }

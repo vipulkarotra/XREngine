@@ -1,63 +1,42 @@
-import React, { useEffect, useState } from 'react'
-import Button from '@material-ui/core/Button'
-import Checkbox from '@material-ui/core/Checkbox'
-import Table from '@material-ui/core/Table'
-import TableBody from '@material-ui/core/TableBody'
-import TableContainer from '@material-ui/core/TableContainer'
-import TableHead from '@material-ui/core/TableHead'
-import TableRow from '@material-ui/core/TableRow'
-import TableCell from '@material-ui/core/TableCell'
-import TableSortLabel from '@material-ui/core/TableSortLabel'
-import Paper from '@material-ui/core/Paper'
-import TablePagination from '@material-ui/core/TablePagination'
-import { connect } from 'react-redux'
-import { bindActionCreators, Dispatch } from 'redux'
-import { selectAppState } from '../../../common/reducers/app/selector'
-import { selectAuthState } from '../../../user/reducers/auth/selector'
-import { PAGE_LIMIT } from '../../reducers/admin/reducers'
-import { fetchAdminScenes } from '../../reducers/admin/scene/service'
-import { fetchLocationTypes } from '../../reducers/admin/location/service'
+import React, { useEffect, useRef, useState } from 'react'
+import Button from '@mui/material/Button'
+import Checkbox from '@mui/material/Checkbox'
+import Table from '@mui/material/Table'
+import TableBody from '@mui/material/TableBody'
+import TableContainer from '@mui/material/TableContainer'
+import TableHead from '@mui/material/TableHead'
+import TableRow from '@mui/material/TableRow'
+import TableCell from '@mui/material/TableCell'
+import TableSortLabel from '@mui/material/TableSortLabel'
+import Paper from '@mui/material/Paper'
+import TablePagination from '@mui/material/TablePagination'
+import { useDispatch } from '../../../store'
+import { useAuthState } from '../../../user/services/AuthService'
+import { ADMIN_PAGE_LIMIT } from '../../services/AdminService'
+import { SceneService } from '../../services/SceneService'
 import styles from './Scenes.module.scss'
-import AddToContentPackModal from '../ContentPack/AddToContentPackModal'
-import { selectAdminSceneState } from '../../reducers/admin/scene/selector'
+import { useSceneState } from '../../services/SceneService'
+import { SceneDetailInterface } from '@xrengine/common/src/interfaces/SceneInterface'
 
 if (!global.setImmediate) {
   global.setImmediate = setTimeout as any
 }
 
 interface Props {
-  authState?: any
   locationState?: any
-  fetchAdminScenes?: any
-  fetchLocationTypes?: any
-  adminSceneState?: any
 }
-
-const mapStateToProps = (state: any): any => {
-  return {
-    appState: selectAppState(state),
-    authState: selectAuthState(state),
-    adminSceneState: selectAdminSceneState(state)
-  }
-}
-
-const mapDispatchToProps = (dispatch: Dispatch): any => ({
-  fetchAdminScenes: bindActionCreators(fetchAdminScenes, dispatch),
-  fetchLocationTypes: bindActionCreators(fetchLocationTypes, dispatch)
-})
 
 const Scenes = (props: Props) => {
-  const { authState, fetchAdminScenes, adminSceneState } = props
-
-  const user = authState.get('user')
-  const adminScenes = adminSceneState.get('scenes').get('scenes')
-  const adminScenesCount = adminSceneState.get('scenes').get('total')
+  const authState = useAuthState()
+  const user = authState.user
+  const adminSceneState = useSceneState()
+  const adminScenes = adminSceneState.scenes
+  const adminScenesCount = adminSceneState.total
 
   const headCell = [
     { id: 'sid', numeric: false, disablePadding: true, label: 'ID' },
     { id: 'name', numeric: false, disablePadding: false, label: 'Name' },
-    { id: 'description', numeric: false, disablePadding: false, label: 'Description' },
-    { id: 'addToContentPack', numeric: false, disablePadding: false, label: 'Add to Content Pack' }
+    { id: 'description', numeric: false, disablePadding: false, label: 'Description' }
   ]
 
   function descendingComparator<T>(a: T, b: T, orderBy: keyof T) {
@@ -72,10 +51,7 @@ const Scenes = (props: Props) => {
 
   type Order = 'asc' | 'desc'
 
-  function getComparator<Key extends keyof any>(
-    order: Order,
-    orderBy: Key
-  ): (a: { [key in Key]: number | string }, b: { [key in Key]: number | string }) => number {
+  function getComparator<Key extends keyof any>(order: Order, orderBy: Key) {
     return order === 'desc'
       ? (a, b) => descendingComparator(a, b, orderBy)
       : (a, b) => -descendingComparator(a, b, orderBy)
@@ -136,11 +112,10 @@ const Scenes = (props: Props) => {
   const [orderBy, setOrderBy] = useState<any>('name')
   const [selected, setSelected] = useState<string[]>([])
   const [page, setPage] = useState(0)
-  const [rowsPerPage, setRowsPerPage] = useState(PAGE_LIMIT)
+  const [rowsPerPage, setRowsPerPage] = useState(ADMIN_PAGE_LIMIT)
   const [refetch, setRefetch] = useState(false)
-  const [addToContentPackModalOpen, setAddToContentPackModalOpen] = useState(false)
-  const [selectedScenes, setSelectedScenes] = useState([])
-
+  const [selectedScenes, setSelectedScenes] = useState<any>([])
+  const dispatch = useDispatch()
   const handleRequestSort = (event: React.MouseEvent<unknown>, property) => {
     const isAsc = orderBy === property && order === 'asc'
     setOrder(isAsc ? 'desc' : 'asc')
@@ -149,7 +124,7 @@ const Scenes = (props: Props) => {
 
   const handleSelectAllClick = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.checked) {
-      const newSelecteds = adminScenes.map((n) => n.name)
+      const newSelecteds = adminScenes.value.map((n) => n.name)
       setSelected(newSelecteds)
       return
     }
@@ -158,7 +133,7 @@ const Scenes = (props: Props) => {
 
   const handlePageChange = (event: unknown, newPage: number) => {
     const incDec = page < newPage ? 'increment' : 'decrement'
-    fetchAdminScenes(incDec)
+    SceneService.fetchAdminScenes(incDec)
     setPage(newPage)
   }
 
@@ -166,9 +141,10 @@ const Scenes = (props: Props) => {
     setRowsPerPage(parseInt(event.target.value, 10))
     setPage(0)
   }
-
+  const isMounted = useRef(false)
   const fetchTick = () => {
     setTimeout(() => {
+      if (!isMounted.current) return
       setRefetch(true)
       fetchTick()
     }, 5000)
@@ -183,15 +159,17 @@ const Scenes = (props: Props) => {
   }
 
   useEffect(() => {
+    isMounted.current = true
     fetchTick()
   }, [])
 
   useEffect(() => {
-    if (user?.id != null && (adminSceneState.get('scenes').get('updateNeeded') === true || refetch === true)) {
-      fetchAdminScenes()
+    if (!isMounted.current) return
+    if (user?.id.value != null && (adminSceneState.updateNeeded.value === true || refetch === true)) {
+      SceneService.fetchAdminScenes()
     }
     setRefetch(false)
-  }, [authState, adminSceneState, refetch])
+  }, [authState.user?.id?.value, adminSceneState.updateNeeded.value, refetch])
 
   return (
     <div>
@@ -205,59 +183,57 @@ const Scenes = (props: Props) => {
               orderBy={orderBy}
               onSelectAllClick={handleSelectAllClick}
               onRequestSort={handleRequestSort}
-              rowCount={adminScenesCount || 0}
+              rowCount={adminScenesCount?.value || 0}
             />
             <TableBody className={styles.thead}>
-              {stableSort(adminScenes, getComparator(order, orderBy))
-                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                .map((row, index) => {
-                  return (
-                    <TableRow
-                      hover
-                      className={styles.trowHover}
-                      style={{ color: 'black !important' }}
-                      // onClick={(event) => handleLocationClick(event, row.id.toString())}
-                      tabIndex={-1}
-                      key={row.id}
+              {stableSort(adminScenes.value, getComparator(order, orderBy)).map((row, index) => {
+                return (
+                  <TableRow
+                    hover
+                    className={styles.trowHover}
+                    style={{ color: 'black !important' }}
+                    // onClick={(event) => handleLocationClick(event, row.id.toString())}
+                    tabIndex={-1}
+                    key={row.id}
+                  >
+                    <TableCell
+                      className={styles.tcell}
+                      component="th"
+                      id={row.id.toString()}
+                      align="right"
+                      scope="row"
+                      padding="none"
                     >
-                      <TableCell
-                        className={styles.tcell}
-                        component="th"
-                        id={row.id.toString()}
-                        align="right"
-                        scope="row"
-                        padding="none"
-                      >
-                        {row.sid}
-                      </TableCell>
-                      <TableCell className={styles.tcell} align="right">
-                        {row.name}
-                      </TableCell>
-                      <TableCell className={styles.tcell} align="right">
-                        {row.description}
-                      </TableCell>
-                      <TableCell className={styles.tcell} align="right">
-                        {user.userRole === 'admin' && (
-                          <Checkbox
-                            className={styles.checkbox}
-                            onChange={(e) => handleCheck(e, row)}
-                            name="stereoscopic"
-                            color="primary"
-                          />
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
+                      {row.sid}
+                    </TableCell>
+                    <TableCell className={styles.tcell} align="right">
+                      {row.name}
+                    </TableCell>
+                    <TableCell className={styles.tcell} align="right">
+                      {row.description}
+                    </TableCell>
+                    <TableCell className={styles.tcell} align="right">
+                      {user.userRole.value === 'admin' && (
+                        <Checkbox
+                          className={styles.checkbox}
+                          onChange={(e) => handleCheck(e, row)}
+                          name="stereoscopic"
+                          color="primary"
+                        />
+                      )}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
         </TableContainer>
 
         <div className={styles.tableFooter}>
           <TablePagination
-            rowsPerPageOptions={[PAGE_LIMIT]}
+            rowsPerPageOptions={[ADMIN_PAGE_LIMIT]}
             component="div"
-            count={adminScenesCount}
+            count={adminScenesCount?.value || 0}
             rowsPerPage={rowsPerPage}
             page={page}
             onPageChange={handlePageChange}
@@ -265,23 +241,9 @@ const Scenes = (props: Props) => {
             className={styles.tablePagination}
           />
         </div>
-        <AddToContentPackModal
-          open={addToContentPackModalOpen}
-          scenes={selectedScenes}
-          handleClose={() => setAddToContentPackModalOpen(false)}
-        />
       </Paper>
-      <Button
-        className={styles['open-modal']}
-        type="button"
-        variant="contained"
-        color="primary"
-        onClick={() => setAddToContentPackModalOpen(true)}
-      >
-        Add to Content Pack
-      </Button>
     </div>
   )
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(Scenes)
+export default Scenes

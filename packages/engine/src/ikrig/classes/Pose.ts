@@ -1,18 +1,37 @@
+import { Bone, SkinnedMesh } from 'three'
 import { Object3D, Quaternion, Skeleton, Vector3 } from 'three'
 import { SkeletonUtils } from '../../avatar/SkeletonUtils'
-import { getComponent } from '../../ecs/functions/EntityFunctions'
-import { IKObj } from '../components/IKObj'
 import { DOWN, LEFT, RIGHT } from '../constants/Vector3Constants'
-import { spin_bone_forward, align_chain, align_bone_forward } from '../functions/IKFunctions'
+import { spinBoneForward, alignChain, alignBoneForward, worldToModel } from '../functions/IKFunctions'
+import { Entity } from '../../ecs/classes/Entity'
+import { transformAdd } from '../functions/IKSolvers'
+
+export type BoneTransform = {
+  position: Vector3
+  quaternion: Quaternion
+  scale: Vector3
+}
+
+export type PoseBoneLocalState = {
+  bone: Bone
+  parent: Bone | null
+  chg_state: number // If Local Has Been Updated
+  idx: number // Bone Index in Armature
+  p_idx: number // Parent Bone Index in Armature
+  length: number // Length of Bone
+  name: string
+  local: BoneTransform // Local Transform, use Bind pose as default
+  world: BoneTransform // Model Space Transform
+}
 
 class Pose {
-  static ROTATION: any = 1
-  static POSITION: any = 2
-  static SCALE: any = 4
+  static ROTATION = 1
+  static POSITION = 2
+  static SCALE = 4
 
-  entity: any
+  entity: Entity
   skeleton: Skeleton
-  bones: any[]
+  bones: PoseBoneLocalState[]
   rootOffset = {
     quaternion: new Quaternion(),
     position: new Vector3(0, 0, 0),
@@ -20,55 +39,151 @@ class Pose {
   }
   helper: any
 
-  align_leg(b_names) {
-    align_chain(this, DOWN, b_names)
+  alignLeg(b_names: string[]) {
+    alignChain(this, DOWN, b_names)
     return this
   }
-  align_arm_left(b_names) {
-    align_chain(this, LEFT, b_names)
+  alignArmLeft(b_names: string[]) {
+    alignChain(this, LEFT, b_names)
     return this
   }
-  align_arm_right(b_names) {
-    align_chain(this, RIGHT, b_names)
-    return this
-  }
-
-  align_foot(b_name) {
-    spin_bone_forward(this, b_name)
-    align_bone_forward(this, b_name)
+  alignArmRight(b_names: string[]) {
+    alignChain(this, RIGHT, b_names)
     return this
   }
 
-  spin_bone_forward(b_name) {
-    spin_bone_forward(this, b_name)
-    return this
-  }
-  align_bone_forward(b_name) {
-    align_bone_forward(this, b_name)
+  alignFoot(b_name: string) {
+    spinBoneForward(this, b_name)
+    alignBoneForward(this, b_name)
     return this
   }
 
-  constructor(entity, clone) {
-    this.entity = entity
-    const armature = getComponent(entity, IKObj).ref
-    this.skeleton = clone
-      ? SkeletonUtils.clone(armature.parent).children.find((skin) => skin.skeleton != null).skeleton
-      : armature.parent.children.find((skin) => skin.skeleton != null).skeleton // Recreation of Bone Hierarchy
+  spinBoneForward(b_name: string) {
+    spinBoneForward(this, b_name)
+    return this
+  }
+  alignBoneForward(b_name: string) {
+    alignBoneForward(this, b_name)
+    return this
+  }
 
-    this.bones = this.skeleton.bones
-    this.rootOffset = new Object3D() // Parent Transform for Root Bone ( Skeletons from FBX imports need this to render right )
-    for (let i = 0; i < this.skeleton.bones.length; i++) {
-      const b = this.skeleton.bones[i] as any
-      b['index'] = i
-      if (b.children.length > 0) {
-        const bWorldPosition = new Vector3()
-        const bChildWorldPosition = new Vector3()
-        b.getWorldPosition(bWorldPosition)
-        b.children[0].getWorldPosition(bChildWorldPosition)
-        b.length = bWorldPosition.distanceTo(bChildWorldPosition)
-      }
+  /**
+   *
+   * @param rootObject object containing skinnedMesh and it's bones
+   * @param clone make a cloned version of skeleton
+   */
+  constructor(rootObject: Object3D, clone = false) {
+    this.bones = []
+    const parent: Object3D = clone ? SkeletonUtils.clone(rootObject) : rootObject
+    const skeleton = this.getSkeleton(parent) // Recreation of Bone Hierarchy
+
+    if (!skeleton) {
+      console.warn('Could not find skeleton object', this, rootObject, clone)
+      return
     }
+
+    this.skeleton = skeleton
+
+    if (!this.skeleton.bones[0]) {
+      debugger
+    }
+
+    // this.bones = this.skeleton.bones
+    this.rootOffset = new Object3D() // Parent Transform for Root Bone ( Skeletons from FBX imports need this to render right )
+
+    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    // Create Bone Transform Hierarchy to do transformations
+    // without changing the actual armature.
+    const skeletonTransform = {
+      position: new Vector3(),
+      quaternion: new Quaternion(),
+      invQuaternion: new Quaternion(),
+      scale: new Vector3()
+    }
+
+    const rootBone = this.skeleton.bones.find((b) => !(b.parent instanceof Bone))
+
+    if (!rootBone) {
+      console.warn('Could not find skeleton root bone', skeleton)
+    }
+
+    ;(skeleton as any).rootBone = rootBone
+    rootBone!.updateWorldMatrix(true, true)
+
+    if (rootBone!.parent) {
+      rootBone!.parent.matrixWorld.decompose(
+        skeletonTransform.position,
+        skeletonTransform.quaternion,
+        skeletonTransform.scale
+      )
+      skeletonTransform.invQuaternion.copy(skeletonTransform.quaternion).invert()
+    }
+
+    for (let i = 0; i < this.skeleton.bones.length; i++) {
+      const bone = this.skeleton.bones[i]
+      let p_idx, boneParent
+      if (bone.parent && bone.parent instanceof Bone) {
+        p_idx = this.skeleton.bones.indexOf(bone.parent)
+        boneParent = bone.parent
+      }
+
+      const boneData = {
+        bone,
+        parent: boneParent,
+        chg_state: 0, // If Local Has Been Updated
+        idx: i, // Bone Index in Armature
+        p_idx: p_idx, // Parent Bone Index in Armature
+        length: 0.1, // Length of Bone
+        name: bone.name,
+        local: {
+          position: bone.position.clone(),
+          quaternion: bone.quaternion.clone(),
+          scale: bone.scale.clone()
+        }, // Local Transform, use Bind pose as default
+        world: {
+          position: new Vector3(),
+          quaternion: new Quaternion(),
+          invQuaternion: new Quaternion(),
+          scale: new Vector3()
+        } // Model Space Transform
+      }
+
+      bone.matrixWorld.decompose(boneData.world.position, boneData.world.quaternion, boneData.world.scale)
+
+      // convert to model space
+      worldToModel(boneData.world.position, boneData.world.quaternion, boneData.world.scale, skeletonTransform)
+      // Calculate this once for tpose
+      boneData.world.invQuaternion.copy(boneData.world.quaternion).invert()
+
+      //b['index'] = i
+      if (bone.children.length > 0) {
+        // b.getWorldPosition(bWorldPosition)
+        // b.children[0].getWorldPosition(bChildWorldPosition)
+        // bWorldPosition.divide(skeletonTransform.scale)
+        // bChildWorldPosition.divide(skeletonTransform.scale)
+
+        boneData.length = bone.children[0].position.length()
+      }
+
+      this.bones[i] = boneData
+    }
+
     this.skeleton.update()
+  }
+
+  getSkeleton(rootObject: Object3D): Skeleton | null {
+    let skeleton: Skeleton | null = null
+
+    rootObject.traverse((object) => {
+      if (object instanceof SkinnedMesh && object.skeleton != null) {
+        if (skeleton && skeleton.bones.length > object.skeleton.bones.length) {
+          return
+        }
+        skeleton = object.skeleton
+      }
+    })
+
+    return skeleton
   }
 
   setOffset(quaternion: Quaternion, position: Vector3, scale: Vector3) {
@@ -79,31 +194,38 @@ class Pose {
   }
 
   setBone(index: number, quaternion?: Quaternion, position?: Vector3, scale?: Vector3) {
-    if (quaternion) this.bones[index].quaternion.copy(quaternion)
-    if (position) this.bones[index].position.copy(position)
-    if (scale) this.bones[index].scale.copy(scale)
+    // TODO: check this out, they store this in separate structure that does not change original bone data
+    if (quaternion) this.bones[index].local.quaternion.copy(quaternion)
+    if (position) this.bones[index].local.position.copy(position)
+    if (scale) this.bones[index].local.scale.copy(scale)
     return this
   }
 
-  apply() {
-    // Copies modified LquatInverseocal Transforms of the Pose to the Bone Entities.
-    const targetSkeleton: Skeleton = getComponent(this.entity, IKObj).ref.skeleton
+  getBone(name: string): PoseBoneLocalState | undefined {
+    // TODO: replace with Map?
+    return this.bones.find((b) => b.name === name)
+  }
 
-    let pb, // Pose Bone
-      o // Bone Object
-    for (let i = 0; i < targetSkeleton.bones.length; i++) {
-      pb = this.skeleton.bones[i]
+  apply(): Pose {
+    // Copies modified LquatInverseocal Transforms of the Pose to the Bone Entities.
+    // const targetSkeleton: Skeleton = getComponent(this.entity, IKObj).ref.skeleton
+
+    let pb: PoseBoneLocalState, // Pose Bone
+      o: Bone // Bone Object
+    for (let i = 0; i < this.skeleton.bones.length; i++) {
+      pb = this.bones[i]
 
       // Check if bone has been modified in the pose
-      o = targetSkeleton.bones[i]
+      o = this.skeleton.bones[i]
       // Copy changes to Bone Entity
-      o.setRotationFromQuaternion(pb.quaternion)
+      // o.setRotationFromQuaternion(pb.quaternion)
 
-      o.position.copy(pb.position)
-      o.scale.copy(pb.scale)
+      o.quaternion.copy(pb.local.quaternion)
+      o.position.copy(pb.local.position)
+      o.scale.copy(pb.local.scale)
     }
     this.skeleton.update()
-    targetSkeleton.update()
+    // targetSkeleton.update()
     return this
   }
 
@@ -117,7 +239,7 @@ class Pose {
   childPosition = new Vector3(0, 0, 0)
 
   // Make sure this is properly named
-  setChildFromParent(parent, child) {
+  setChildFromParent(parent: Object3D, child: Object3D): Pose {
     console.log('parent, child', parent, child)
 
     // POSITION - parent.position + ( parent.quaternion * ( parent.scale * child.position ) )
@@ -141,40 +263,110 @@ class Pose {
     return this
   }
 
-  getParentRoot(boneIndex) {
-    // ORIGINAL CODE
-    // get_parent_rot( b_idx, q=null ){
-    // 	let cbone = this.bones[ b_idx ];
-    // 	q = q || new Quat();
-
-    const bone = this.bones[boneIndex]
+  getParentRotation(boneIndex: number): Quaternion {
+    // // ORIGINAL CODE
+    // // get_parent_rot( b_idx, q=null ){
+    // // 	let cbone = this.bones[ b_idx ];
+    // // 	q = q || new Quat();
+    //
+    // const bone = this.skeleton.bones[this.bones[boneIndex].idx]
+    // const q = new Quaternion()
+    //
+    // // ORIGINAL CODE
+    // //if( cbone.p_idx == null ) q.reset();
+    // // Child is a Root Bone, just reset since there is no parent.
+    // if (bone.parent == null) q.identity()
+    // else {
+    //   // ORIGINAL CODE
+    //   // let b = this.bones[ cbone.p_idx ];
+    //   // 	q.copy( b.local.rot );
+    //
+    //   // 	while( b.p_idx != null ){
+    //   // 		b = this.bones[ b.p_idx ];
+    //   // 		q.pmul( b.local.rot );
+    //   // 	}
+    //   // Parents Exist, loop till reaching the root
+    //   let b = bone.parent
+    //   q.copy(b.quaternion)
+    //   while (b.parent != null && b.parent.type === 'Bone') {
+    //     b = b.parent
+    //     q.premultiply(b.quaternion)
+    //   }
+    // }
+    // // ORIGINAL CODE
+    // // q.pmul( this.root_offset.rot ); // Add Starting Offset
+    // q.premultiply(this.rootOffset.quaternion) // Add Starting Offset
+    const cbone = this.bones[boneIndex]
     const q = new Quaternion()
 
-    // ORIGINAL CODE
-    //if( cbone.p_idx == null ) q.reset();
+    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Child is a Root Bone, just reset since there is no parent.
-    if (bone.parent == null) q.identity()
+    if (cbone.p_idx == null) q.identity()
     else {
-      // ORIGINAL CODE
-      // let b = this.bones[ cbone.p_idx ];
-      // 	q.copy( b.local.rot );
-
-      // 	while( b.p_idx != null ){
-      // 		b = this.bones[ b.p_idx ];
-      // 		q.pmul( b.local.rot );
-      // 	}
       // Parents Exist, loop till reaching the root
-      let b = bone.parent
-      q.copy(b.quaternion)
-      while (b.parent != null && b.parent.type === 'Bone') {
-        b = b.parent
-        q.premultiply(b.quaternion)
+      let b = this.bones[cbone.p_idx]
+      q.copy(b.local.quaternion)
+
+      while (b.p_idx != null) {
+        b = this.bones[b.p_idx]
+        q.premultiply(b.local.quaternion)
       }
     }
-    // ORIGINAL CODE
-    // q.pmul( this.root_offset.rot ); // Add Starting Offset
+
+    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     q.premultiply(this.rootOffset.quaternion) // Add Starting Offset
     return q
+  }
+
+  transformAddRev(pt: BoneTransform, ct: BoneTransform) {
+    pt.position.multiply(ct.scale).applyQuaternion(ct.quaternion).add(ct.position)
+    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    // SCALE - parent.scale * child.scale
+    pt.scale.multiply(ct.scale)
+    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    // ROTATION - parent.rotation * child.rotation
+    pt.quaternion.premultiply(ct.quaternion) // Must Rotate from Parent->Child, need PMUL
+  }
+
+  getParentWorld(b_idx: number, pt: BoneTransform, ct: BoneTransform, t_offset?: BoneTransform) {
+    const cbone = this.bones[b_idx]
+
+    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    // Child is a Root Bone, just reset since there is no parent.
+    if (cbone.p_idx == null) {
+      pt.position.set(0, 0, 0)
+      pt.scale.set(0, 0, 0)
+      pt.quaternion.set(0, 0, 0, 0)
+    } else {
+      // Parents Exist, loop till reaching the root
+      let b = this.bones[cbone.p_idx]
+      pt.position.copy(b.local.position)
+      pt.scale.copy(b.local.scale)
+      pt.quaternion.copy(b.local.quaternion)
+
+      while (b.p_idx != null) {
+        b = this.bones[b.p_idx]
+        this.transformAddRev(pt, b.local)
+      }
+    }
+
+    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    this.transformAddRev(pt, this.rootOffset) // Add Starting Offset
+    if (t_offset) {
+      this.transformAddRev(pt, t_offset) // Add Additional Starting Offset
+    }
+
+    if (ct) {
+      ct.position.copy(pt.position)
+      ct.scale.copy(pt.scale)
+      ct.quaternion.copy(pt.quaternion)
+      transformAdd(ct, cbone.local) // Requesting Child WS Info Too
+      // ct.from_add(pt, cbone.local) // Requesting Child WS Info Too
+    }
+
+    return pt
   }
 }
 

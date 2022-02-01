@@ -1,8 +1,10 @@
-import { defineQuery, defineSystem, System } from 'bitecs'
-import { Euler, Quaternion } from 'three'
-import { ECSWorld } from '../../ecs/classes/World'
-import { getComponent, hasComponent, removeComponent } from '../../ecs/functions/EntityFunctions'
+import { Euler } from 'three'
+import { Engine } from '../../ecs/classes/Engine'
+import { AvatarComponent } from '../../avatar/components/AvatarComponent'
+import { World } from '../../ecs/classes/World'
+import { defineQuery, getComponent, hasComponent, removeComponent } from '../../ecs/functions/ComponentFunctions'
 import { Object3DComponent } from '../../scene/components/Object3DComponent'
+import { SpawnPointComponent } from '../../scene/components/SpawnPointComponent'
 import { CopyTransformComponent } from '../components/CopyTransformComponent'
 import { DesiredTransformComponent } from '../components/DesiredTransformComponent'
 import { TransformChildComponent } from '../components/TransformChildComponent'
@@ -15,16 +17,17 @@ euler1YXZ.order = 'YXZ'
 const euler2YXZ = new Euler()
 euler2YXZ.order = 'YXZ'
 
-export const TransformSystem = async (): Promise<System> => {
+export default async function TransformSystem(world: World) {
   const parentQuery = defineQuery([TransformParentComponent, TransformComponent])
   const childQuery = defineQuery([TransformChildComponent, TransformComponent])
   const copyTransformQuery = defineQuery([CopyTransformComponent])
   const desiredTransformQuery = defineQuery([DesiredTransformComponent])
   const tweenQuery = defineQuery([TweenComponent])
   const transformObjectQuery = defineQuery([TransformComponent, Object3DComponent])
+  const spawnPointQuery = defineQuery([SpawnPointComponent])
 
-  return defineSystem((world: ECSWorld) => {
-    const { delta } = world
+  return () => {
+    const { fixedDelta } = world
     for (const entity of parentQuery(world)) {
       const parentTransform = getComponent(entity, TransformComponent)
       const parentingComponent = getComponent(entity, TransformParentComponent)
@@ -84,13 +87,13 @@ export const TransformSystem = async (): Promise<System> => {
       const desiredTransform = getComponent(entity, DesiredTransformComponent)
 
       const mutableTransform = getComponent(entity, TransformComponent)
-      mutableTransform.position.lerp(desiredTransform.position, desiredTransform.positionRate * delta)
+      mutableTransform.position.lerp(desiredTransform.position, desiredTransform.positionRate * fixedDelta)
 
       // store rotation before interpolation
       euler1YXZ.setFromQuaternion(mutableTransform.rotation)
       // lerp to desired rotation
 
-      mutableTransform.rotation.slerp(desiredTransform.rotation, desiredTransform.rotationRate * delta)
+      mutableTransform.rotation.slerp(desiredTransform.rotation, desiredTransform.rotationRate * fixedDelta)
       euler2YXZ.setFromQuaternion(mutableTransform.rotation)
       // use axis locks - yes this is correct, the axis order is weird because quaternions
       if (desiredTransform.lockRotationAxis[0]) {
@@ -122,8 +125,14 @@ export const TransformSystem = async (): Promise<System> => {
       object3DComponent.value.position.copy(transform.position)
       object3DComponent.value.quaternion.copy(transform.rotation)
       object3DComponent.value.scale.copy(transform.scale)
-      object3DComponent.value.updateMatrixWorld()
+      if (!hasComponent(entity, AvatarComponent)) object3DComponent.value.updateMatrixWorld()
     }
-    return world
-  })
+
+    if (Engine.isEditor) {
+      for (let entity of spawnPointQuery()) {
+        const obj3d = getComponent(entity, Object3DComponent)?.value
+        if (obj3d) obj3d.userData.helperModel?.scale.set(1 / obj3d.scale.x, 1 / obj3d.scale.y, 1 / obj3d.scale.z)
+      }
+    }
+  }
 }

@@ -2,7 +2,7 @@ import { Sequelize, DataTypes } from 'sequelize'
 import { Application } from '../../../declarations'
 // import Location from './location.model'
 
-export default (app: Application): any => {
+export default (app: Application) => {
   const sequelizeClient: Sequelize = app.get('sequelizeClient')
   const instance = sequelizeClient.define(
     'instance',
@@ -22,6 +22,17 @@ export default (app: Application): any => {
       currentUsers: {
         type: DataTypes.INTEGER,
         defaultValue: 0
+      },
+      ended: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+      },
+      assigned: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+      },
+      assignedAt: {
+        type: DataTypes.DATE
       }
     },
     {
@@ -38,6 +49,8 @@ export default (app: Application): any => {
     ;(instance as any).hasMany(models.user, { foreignKey: { allowNull: true } })
     ;(instance as any).hasOne(models.gameserver_subdomain_provision, { foreignKey: { allowNull: true } })
     ;(instance as any).hasMany(models.bot, { foreignKey: { allowNull: true } })
+    ;(instance as any).belongsToMany(models.user, { as: 'instanceAuthorizedUser', through: 'instance_authorized_user' })
+    ;(instance as any).hasMany(models.instance_authorized_user, { foreignKey: { allowNull: false } })
   }
   return instance
 }

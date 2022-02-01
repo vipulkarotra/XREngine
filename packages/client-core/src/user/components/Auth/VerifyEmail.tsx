@@ -1,9 +1,9 @@
 import React, { useEffect } from 'react'
-import Box from '@material-ui/core/Box'
-import Typography from '@material-ui/core/Typography'
-import Container from '@material-ui/core/Container'
+import Box from '@mui/material/Box'
+import Typography from '@mui/material/Typography'
+import Container from '@mui/material/Container'
 import { EmptyLayout } from '../../../common/components/Layout/EmptyLayout'
-import { verifyEmail } from '../../reducers/auth/service'
+import { AuthService } from '../../services/AuthService'
 import styles from './Auth.module.scss'
 import { useTranslation } from 'react-i18next'
 
@@ -11,15 +11,14 @@ interface Props {
   auth: any
   type: string
   token: string
-  verifyEmail: typeof verifyEmail
 }
 
 export const VerifyEmail = (props: Props): any => {
-  const { verifyEmail, token } = props
+  const { token } = props
   const { t } = useTranslation()
 
   useEffect(() => {
-    verifyEmail(token)
+    AuthService.verifyEmail(token)
   }, [])
 
   return (

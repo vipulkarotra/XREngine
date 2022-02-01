@@ -1,30 +1,14 @@
-import { Camera } from '@styled-icons/fa-solid'
-import React, { useState } from 'react'
-import { withTranslation } from 'react-i18next'
+import React from 'react'
+import CameraAltIcon from '@mui/icons-material/CameraAlt'
 import { CameraMode } from '@xrengine/engine/src/camera/types/CameraMode'
 import BooleanInput from '../inputs/BooleanInput'
 import InputGroup from '../inputs/InputGroup'
 import { NumericInputGroup } from '../inputs/NumericInputGroup'
 import SelectInput from '../inputs/SelectInput'
 import NodeEditor from './NodeEditor'
-
-/**
- * [propTypes Defining properties for CameraProperties component]
- * @type {Object}
- */
-type CameraPropertiesNodeEditorPropTypes = {
-  editor?: any
-  node?: any
-  t?: any
-}
-
-interface Props {
-  node?: any
-  value?: any
-  onChangeFunction?: any
-  op?: any
-  getProp?: any
-}
+import { getComponent } from '@xrengine/engine/src/ecs/functions/ComponentFunctions'
+import { CameraPropertiesComponent } from '@xrengine/engine/src/scene/components/CameraPropertiesComponent'
+import { EditorComponentType, updateProperty } from './Util'
 
 /** Types copied from Camera Modes of engine. */
 const cameraModeSelect = [
@@ -54,25 +38,6 @@ const cameraModeSelect = [
   }
 ]
 
-const defaultCameraModeSelect = [
-  {
-    label: 'First Person',
-    value: CameraMode.FirstPerson
-  },
-  {
-    label: 'Shoulder Cam',
-    value: CameraMode.ShoulderCam
-  },
-  {
-    label: 'Third Person',
-    value: CameraMode.ThirdPerson
-  },
-  {
-    label: 'Top Down',
-    value: CameraMode.TopDown
-  }
-]
-
 /** Types copied from Camera Modes of engine. */
 const projectionTypeSelect = [
   {
@@ -90,180 +55,143 @@ const projectionTypeSelect = [
  * @type {[component class]}
  */
 
-export function CameraPropertiesNodeEditor(props: CameraPropertiesNodeEditorPropTypes) {
-  const { node, editor, t } = props
-  const [cameraMode, setCameraMode] = useState(node.cameraMode) as any
-
-  // function to handle changes in payloadName property
-  const onChangePayload = (propName, prop) => {
-    editor.setPropertySelected(propName, prop)
-  }
+export const CameraPropertiesNodeEditor: EditorComponentType = (props) => {
+  const cameraPropertiesComponent = getComponent(props.node.entity, CameraPropertiesComponent)
 
   return (
     <NodeEditor {...props} description={'Properties that will affect the player camera'}>
-      {/* @ts-ignore */}
       <InputGroup name="Start In Free Look" label={'Start In Free Look'}>
         <BooleanInput
-          value={(node as any).startInFreeLook}
-          onChange={(value) => onChangePayload('startInFreeLook', value)}
+          value={cameraPropertiesComponent.startInFreeLook}
+          onChange={updateProperty(CameraPropertiesComponent, 'startInFreeLook')}
         />
       </InputGroup>
-      {/* @ts-ignore */}
       <InputGroup name="Projection Type" label={'Projection Type'}>
-        {/* @ts-ignore */}
         <SelectInput
           placeholder={projectionTypeSelect[0].label}
-          value={node.projectionType}
-          onChange={(value) => onChangePayload('projectionType', value)}
+          value={cameraPropertiesComponent.projectionType}
+          onChange={updateProperty(CameraPropertiesComponent, 'projectionType')}
           options={projectionTypeSelect}
         />
       </InputGroup>
-      {/* @ts-ignore */}
       <InputGroup name="Camera Mode" label={'Camera Mode'}>
-        {/* @ts-ignore */}
         <SelectInput
           placeholder={cameraModeSelect[0].label}
-          value={node.cameraMode}
-          onChange={(value) => {
-            onChangePayload('cameraMode', value)
-            setCameraMode(value)
-          }}
+          value={cameraPropertiesComponent.cameraMode}
+          onChange={updateProperty(CameraPropertiesComponent, 'cameraMode')}
           options={cameraModeSelect}
         />
       </InputGroup>
 
-      {cameraMode == CameraMode.Dynamic && (
-        /* @ts-ignore */
-        <InputGroup name="Default Camera Mode" label={'Default Camera Mode'}>
-          {/* @ts-ignore */}
-          <SelectInput
-            placeholder={defaultCameraModeSelect[0].label}
-            value={node.defaultCameraMode}
-            onChange={(value) => onChangePayload('defaultCameraMode', value)}
-            options={defaultCameraModeSelect}
-          />
-        </InputGroup>
-      )}
-      {/* @ts-ignore */}
-
       <NumericInputGroup
         name="Field Of View"
         label={'FOV'}
-        onChange={(value) => onChangePayload('fov', value)}
+        onChange={updateProperty(CameraPropertiesComponent, 'fov')}
         min={1}
         max={180}
         default={50}
         smallStep={0.001}
         mediumStep={0.01}
         largeStep={0.1}
-        value={(node as any).fov}
+        value={cameraPropertiesComponent.fov}
       />
 
-      {/* @ts-ignore */}
       <NumericInputGroup
         name="cameraNearClip"
         label={'Min Projection Distance'}
-        onChange={(value) => onChangePayload('cameraNearClip', value)}
+        onChange={updateProperty(CameraPropertiesComponent, 'cameraNearClip')}
         min={0.001}
         smallStep={0.001}
         mediumStep={0.01}
         largeStep={0.1}
         default={0.1}
-        value={(node as any).cameraNearClip}
+        value={cameraPropertiesComponent.cameraNearClip}
       />
 
-      {/* @ts-ignore */}
       <NumericInputGroup
         name="cameraFarClip"
         label={'Max Projection Distance'}
-        onChange={(value) => onChangePayload('cameraFarClip', value)}
+        onChange={updateProperty(CameraPropertiesComponent, 'cameraFarClip')}
         min={0.001}
         smallStep={0.001}
         mediumStep={0.01}
         largeStep={0.1}
         default={100}
-        value={(node as any).cameraFarClip}
+        value={cameraPropertiesComponent.cameraFarClip}
       />
-      {/* @ts-ignore */}
       <NumericInputGroup
         name="minCameraDistance"
         label={'Min Camera Distance'}
-        onChange={(value) => onChangePayload('minCameraDistance', value)}
+        onChange={updateProperty(CameraPropertiesComponent, 'minCameraDistance')}
         min={0.001}
         smallStep={0.001}
         mediumStep={0.01}
         largeStep={0.1}
         default={20}
-        value={(node as any).minCameraDistance}
+        value={cameraPropertiesComponent.minCameraDistance}
       />
 
-      {/* @ts-ignore */}
       <NumericInputGroup
         name="maxCameraDistance"
         label={'Max Camera Distance'}
-        onChange={(value) => onChangePayload('maxCameraDistance', value)}
+        onChange={updateProperty(CameraPropertiesComponent, 'maxCameraDistance')}
         min={0.001}
         smallStep={0.001}
         mediumStep={0.01}
         largeStep={0.1}
         default={5}
-        value={(node as any).maxCameraDistance}
+        value={cameraPropertiesComponent.maxCameraDistance}
       />
-      {/* @ts-ignore */}
       <NumericInputGroup
         name="startCameraDistance"
         label={'Start Camera Distance'}
-        onChange={(value) => onChangePayload('startCameraDistance', value)}
+        onChange={updateProperty(CameraPropertiesComponent, 'startCameraDistance')}
         min={0.001}
         smallStep={0.001}
         mediumStep={0.01}
         largeStep={0.1}
         default={5}
-        value={(node as any).startCameraDistance}
+        value={cameraPropertiesComponent.startCameraDistance}
       />
 
-      {/* @ts-ignore */}
       <NumericInputGroup
         name="minPhi"
         label={'Min Phi'}
-        onChange={(value) => onChangePayload('minPhi', value)}
+        onChange={updateProperty(CameraPropertiesComponent, 'minPhi')}
         min={0.001}
         smallStep={0.001}
         mediumStep={0.01}
         largeStep={0.1}
         default={20}
-        value={(node as any).minPhi}
+        value={cameraPropertiesComponent.minPhi}
       />
 
-      {/* @ts-ignore */}
       <NumericInputGroup
         name="maxPhi"
         label={'Max Phi'}
-        onChange={(value) => onChangePayload('maxPhi', value)}
+        onChange={updateProperty(CameraPropertiesComponent, 'maxPhi')}
         min={0.001}
         smallStep={0.001}
         mediumStep={0.01}
         largeStep={0.1}
         default={5}
-        value={(node as any).maxPhi}
+        value={cameraPropertiesComponent.maxPhi}
       />
-      {/* @ts-ignore */}
       <NumericInputGroup
         name="startPhi"
         label={'Start Phi'}
-        onChange={(value) => onChangePayload('startPhi', value)}
+        onChange={updateProperty(CameraPropertiesComponent, 'startPhi')}
         min={0.001}
         smallStep={0.001}
         mediumStep={0.01}
         largeStep={0.1}
         default={5}
-        value={(node as any).startPhi}
+        value={cameraPropertiesComponent.startPhi}
       />
     </NodeEditor>
   )
 }
 
-CameraPropertiesNodeEditor.iconComponent = Camera
-CameraPropertiesNodeEditor.description = 'For changing scene camera properties'
+CameraPropertiesNodeEditor.iconComponent = CameraAltIcon
 
-export default withTranslation()(CameraPropertiesNodeEditor)
+export default CameraPropertiesNodeEditor

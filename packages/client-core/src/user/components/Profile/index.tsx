@@ -1,9 +1,8 @@
-import Backdrop from '@material-ui/core/Backdrop'
-import Fade from '@material-ui/core/Fade'
-import Modal from '@material-ui/core/Modal'
-import Tab from '@material-ui/core/Tab'
-import Tabs from '@material-ui/core/Tabs'
-import { AccountCircle, Settings } from '@material-ui/icons'
+import Fade from '@mui/material/Fade'
+import Modal from '@mui/material/Modal'
+import Tab from '@mui/material/Tab'
+import Tabs from '@mui/material/Tabs'
+import { AccountCircle, Settings } from '@mui/icons-material'
 import classNames from 'classnames'
 import React, { Fragment, useState } from 'react'
 import styles from './Profile.module.scss'
@@ -47,10 +46,6 @@ const ProfileModal = (props: Props): any => {
         open={props.open}
         onClose={props.handleClose}
         closeAfterTransition
-        BackdropComponent={Backdrop}
-        BackdropProps={{
-          timeout: 500
-        }}
       >
         <Fade in={props.open}>
           <div

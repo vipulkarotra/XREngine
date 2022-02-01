@@ -1,7 +1,7 @@
 import { Sequelize, DataTypes } from 'sequelize'
 import { Application } from '../../../declarations'
 
-export default (app: Application): any => {
+export default (app: Application) => {
   const sequelizeClient: Sequelize = app.get('sequelizeClient')
   const identityProvider = sequelizeClient.define(
     'identity_provider',
@@ -12,7 +12,7 @@ export default (app: Application): any => {
         allowNull: false,
         primaryKey: true
       },
-      token: { type: DataTypes.STRING },
+      token: { type: DataTypes.STRING, unique: true },
       password: { type: DataTypes.STRING },
       isVerified: { type: DataTypes.BOOLEAN },
       verifyToken: { type: DataTypes.STRING },
@@ -24,7 +24,7 @@ export default (app: Application): any => {
       type: {
         type: DataTypes.STRING,
         allowNull: false,
-        values: ['email', 'sms', 'password', 'github', 'google', 'facebook', 'twitter', 'linkedin', 'auth0']
+        values: ['email', 'sms', 'password', 'discord', 'github', 'google', 'facebook', 'twitter', 'linkedin', 'auth0']
       }
     },
     {

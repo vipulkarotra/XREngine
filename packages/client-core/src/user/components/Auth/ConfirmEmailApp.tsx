@@ -1,44 +1,27 @@
+import Button from '@mui/material/Button'
+import CardMedia from '@mui/material/CardMedia'
+import Typography from '@mui/material/Typography'
 import React from 'react'
-import { useHistory } from 'react-router-dom'
-
-import Button from '@material-ui/core/Button'
-import Typography from '@material-ui/core/Typography'
-import { connect } from 'react-redux'
-import { bindActionCreators, Dispatch } from 'redux'
-import { resendVerificationEmail } from '../../reducers/auth/service'
-import { selectAuthState } from '../../reducers/auth/selector'
-import { IdentityProvider } from '@xrengine/common/src/interfaces/IdentityProvider'
-import CardMedia from '@material-ui/core/CardMedia'
 import { Trans, useTranslation } from 'react-i18next'
-
-import styles from '../../../socialmedia/components/Login/Login.module.scss'
-
-const mapStateToProps = (state: any): any => {
-  return {
-    auth: selectAuthState(state)
-  }
-}
-
-const mapDispatchToProps = (dispatch: Dispatch): any => ({
-  resendVerificationEmail: bindActionCreators(resendVerificationEmail, dispatch)
-})
+import { useHistory } from 'react-router-dom'
+import { AuthService, useAuthState } from '../../services/AuthService'
+import styles from '../Login/Login.module.scss'
 
 interface Props {
   logo?: string
-  auth?: any
-  resendVerificationEmail?: typeof resendVerificationEmail
 }
 
 const ConfirmEmail = (props: Props): any => {
   const history = useHistory()
-  const { auth, resendVerificationEmail } = props
+  const auth = useAuthState()
   const { t } = useTranslation()
+
   const handleResendEmail = (e: any): any => {
     e.preventDefault()
 
-    const identityProvider = auth.get('identityProvider') as IdentityProvider
-    console.log('---------', identityProvider)
-    resendVerificationEmail(identityProvider.token)
+    const identityProvider = auth.identityProvider
+
+    AuthService.resendVerificationEmail(identityProvider.token.value)
   }
 
   return (
@@ -75,4 +58,4 @@ const ConfirmEmail = (props: Props): any => {
 
 const ConfirmEmailWrapper = (props: Props): any => <ConfirmEmail {...props} />
 
-export default connect(mapStateToProps, mapDispatchToProps)(ConfirmEmailWrapper)
+export default ConfirmEmailWrapper

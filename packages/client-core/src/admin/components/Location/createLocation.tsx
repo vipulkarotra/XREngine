@@ -1,61 +1,37 @@
+import MuiAlert from '@mui/material/Alert'
+import Button from '@mui/material/Button'
+import Container from '@mui/material/Container'
+import DialogActions from '@mui/material/DialogActions'
+import DialogTitle from '@mui/material/DialogTitle'
+import Drawer from '@mui/material/Drawer'
+import FormControl from '@mui/material/FormControl'
+import FormControlLabel from '@mui/material/FormControlLabel'
+import FormGroup from '@mui/material/FormGroup'
+import Grid from '@mui/material/Grid'
+import InputBase from '@mui/material/InputBase'
+import MenuItem from '@mui/material/MenuItem'
+import Paper from '@mui/material/Paper'
+import Select from '@mui/material/Select'
+import Snackbar from '@mui/material/Snackbar'
+import Switch from '@mui/material/Switch'
 import React from 'react'
-import Drawer from '@material-ui/core/Drawer'
-import Button from '@material-ui/core/Button'
-import { bindActionCreators, Dispatch } from 'redux'
-import { connect } from 'react-redux'
-import DialogActions from '@material-ui/core/DialogActions'
-import Container from '@material-ui/core/Container'
-import DialogTitle from '@material-ui/core/DialogTitle'
-import Snackbar from '@material-ui/core/Snackbar'
-import MuiAlert from '@material-ui/lab/Alert'
-import { useLocationStyles, useLocationStyle } from './styles'
-import Paper from '@material-ui/core/Paper'
-import InputBase from '@material-ui/core/InputBase'
-import MenuItem from '@material-ui/core/MenuItem'
-import Select from '@material-ui/core/Select'
-import Grid from '@material-ui/core/Grid'
-import FormControl from '@material-ui/core/FormControl'
-import FormControlLabel from '@material-ui/core/FormControlLabel'
-import FormGroup from '@material-ui/core/FormGroup'
-import Switch from '@material-ui/core/Switch'
 import { useTranslation } from 'react-i18next'
-import { selectAdminLocationState } from '../../reducers/admin/location/selector'
-import { selectAdminSceneState } from '../../reducers/admin/scene/selector'
-import { createLocation as createLocationAction } from '../../reducers/admin/location/service'
-import { formValid } from '../Users/validation'
-import { selectAlertState } from '../../../common/reducers/alert/selector'
-
-const Alert = (props) => {
-  return <MuiAlert elevation={6} variant="filled" {...props} />
-}
+import { useAlertState } from '../../../common/services/AlertService'
+import { LocationService, useLocationState } from '../../services/LocationService'
+import { useSceneState } from '../../services/SceneService'
+import { useStyles } from '../../styles/ui'
+import { validateUserForm } from '../Users/validation'
+import AlertMessage from '../../common/AlertMessage'
 
 interface Props {
   open: boolean
   handleClose: any
-  adminLocationState?: any
-  adminSceneState?: any
-  createLocationAction?: any
   closeViewModel?: any
-  adminAlert?: any
 }
-
-const mapStateToProps = (state: any): any => {
-  return {
-    adminLocationState: selectAdminLocationState(state),
-    adminSceneState: selectAdminSceneState(state),
-    adminAlert: selectAlertState(state)
-  }
-}
-
-const mapDispatchToProps = (dispatch: Dispatch): any => ({
-  createLocationAction: bindActionCreators(createLocationAction, dispatch)
-})
 
 const CreateLocation = (props: Props) => {
-  const { open, handleClose, adminLocationState, adminSceneState, createLocationAction, closeViewModel, adminAlert } =
-    props
-  const classesx = useLocationStyle()
-  const classes = useLocationStyles()
+  const { open, handleClose, closeViewModel } = props
+  const classes = useStyles()
   const [openWarning, setOpenWarning] = React.useState(false)
   const [error, setError] = React.useState('')
   const [state, setState] = React.useState({
@@ -79,14 +55,16 @@ const CreateLocation = (props: Props) => {
   })
 
   const { t } = useTranslation()
-  const locationTypes = adminLocationState.get('locationTypes').get('locationTypes')
-  const location = adminLocationState.get('locations')
-  const adminScenes = adminSceneState.get('scenes').get('scenes')
-  const errorType = adminAlert.get('type')
-  const errorMessage = adminAlert.get('message')
+  const adminLocationState = useLocationState()
+  const locationTypes = adminLocationState.locationTypes
+  const location = adminLocationState
+  const adminScenes = useSceneState().scenes
+  const alertState = useAlertState()
+  const errorType = alertState.type
+  const errorMessage = alertState.message
 
   React.useEffect(() => {
-    if (location.get('created')) {
+    if (location.created.value) {
       closeViewModel(false)
       setState({
         ...state,
@@ -103,19 +81,19 @@ const CreateLocation = (props: Props) => {
         isFeatured: false
       })
     }
-  }, [location])
+  }, [location.created.value])
 
   React.useEffect(() => {
-    if (errorType === 'error') {
-      setError(errorMessage)
+    if (errorType.value === 'error') {
+      setError(errorMessage.value)
       setOpenWarning(true)
       setTimeout(() => {
         setOpenWarning(false)
       }, 5000)
     }
-  }, [errorType, errorMessage])
+  }, [errorType.value, errorMessage.value])
 
-  const handleCloseWarning = (event, reason) => {
+  const handleCloseWarning = (event?: React.SyntheticEvent | Event, reason?: string) => {
     if (reason === 'clickaway') {
       return
     }
@@ -149,7 +127,7 @@ const CreateLocation = (props: Props) => {
       name: state.name,
       sceneId: state.scene,
       maxUsersPerInstance: state.maxUsers,
-      location_setting: {
+      location_settings: {
         locationType: state.type,
         instanceMediaChatEnabled: state.globalMediaEnabled,
         audioEnabled: state.audioEnabled,
@@ -170,10 +148,11 @@ const CreateLocation = (props: Props) => {
     if (!state.scene) {
       temp.scene = "Scene can't be empty"
     }
+    console.log(state, temp, { ...state, formErrors: temp })
     setState({ ...state, formErrors: temp })
-    if (formValid(state, state.formErrors)) {
-      createLocationAction(data)
-      //  closeViewModel(false)
+    if (validateUserForm(state, state.formErrors)) {
+      LocationService.createLocation(data)
+      closeViewModel(false)
     } else {
       setError('Please fill all required field')
       setOpenWarning(true)
@@ -182,7 +161,7 @@ const CreateLocation = (props: Props) => {
 
   return (
     <React.Fragment>
-      <Drawer anchor="right" classes={{ paper: classesx.paper }} open={open} onClose={handleClose(false)}>
+      <Drawer anchor="right" classes={{ paper: classes.paperDrawer }} open={open} onClose={handleClose(false)}>
         <Container maxWidth="sm" className={classes.marginTp}>
           <DialogTitle id="form-dialog-title" className={classes.texAlign}>
             Create New Location
@@ -230,13 +209,15 @@ const CreateLocation = (props: Props) => {
                 onChange={handleChange}
                 className={classes.select}
                 name="scene"
-                MenuProps={{ classes: { paper: classesx.selectPaper } }}
+                MenuProps={{ classes: { paper: classes.selectPaper } }}
               >
                 <MenuItem value="" disabled>
                   <em>Select scene</em>
                 </MenuItem>
-                {adminScenes.map((el) => (
-                  <MenuItem value={el.sid} key={el.sid}>{`${el.name} (${el.sid})`}</MenuItem>
+                {adminScenes.value.map((el, i) => (
+                  <MenuItem value={`${el.project}/${el.name}`} key={i}>
+                    {el.name} ({el.project})
+                  </MenuItem>
                 ))}
               </Select>
             </FormControl>
@@ -253,12 +234,12 @@ const CreateLocation = (props: Props) => {
                 onChange={handleChange}
                 className={classes.select}
                 name="type"
-                MenuProps={{ classes: { paper: classesx.selectPaper } }}
+                MenuProps={{ classes: { paper: classes.selectPaper } }}
               >
                 <MenuItem value="" disabled>
                   <em>Select type</em>
                 </MenuItem>
-                {locationTypes.map((el) => (
+                {locationTypes.value.map((el) => (
                   <MenuItem value={el.type} key={el.type}>
                     {el.type}
                   </MenuItem>
@@ -279,7 +260,7 @@ const CreateLocation = (props: Props) => {
                         name="videoEnabled"
                       />
                     }
-                    label={t('admin:components.locationModel.lbl-ve')}
+                    label={t('admin:components.locationModel.lbl-ve') as string}
                   />
                 </FormControl>
               </FormGroup>
@@ -294,7 +275,7 @@ const CreateLocation = (props: Props) => {
                         name="audioEnabled"
                       />
                     }
-                    label={t('admin:components.locationModel.lbl-ae')}
+                    label={t('admin:components.locationModel.lbl-ae') as string}
                   />
                 </FormControl>
               </FormGroup>
@@ -309,7 +290,7 @@ const CreateLocation = (props: Props) => {
                         name="globalMediaEnabled"
                       />
                     }
-                    label={t('admin:components.locationModel.lbl-gme')}
+                    label={t('admin:components.locationModel.lbl-gme') as string}
                   />
                 </FormControl>
               </FormGroup>
@@ -324,7 +305,7 @@ const CreateLocation = (props: Props) => {
                         name="screenSharingEnabled"
                       />
                     }
-                    label={t('admin:components.locationModel.lbl-se')}
+                    label={t('admin:components.locationModel.lbl-se') as string}
                   />
                 </FormControl>
               </FormGroup>
@@ -342,7 +323,7 @@ const CreateLocation = (props: Props) => {
                           name="faceStreamingEnabled"
                         />
                       }
-                      label={t('admin:components.locationModel.lbl-fe')}
+                      label={t('admin:components.locationModel.lbl-fe') as string}
                     />
                   </FormControl>
                 </FormGroup>
@@ -357,7 +338,7 @@ const CreateLocation = (props: Props) => {
                           name="isLobby"
                         />
                       }
-                      label={t('admin:components.locationModel.lbl-lobby')}
+                      label={t('admin:components.locationModel.lbl-lobby') as string}
                     />
                   </FormControl>
                 </FormGroup>
@@ -372,7 +353,7 @@ const CreateLocation = (props: Props) => {
                           name="isFeatured"
                         />
                       }
-                      label={t('admin:components.locationModel.lbl-featured')}
+                      label={t('admin:components.locationModel.lbl-featured') as string}
                     />
                   </FormControl>
                 </FormGroup>
@@ -380,28 +361,18 @@ const CreateLocation = (props: Props) => {
             </Grid>
           </Grid>
           <DialogActions>
-            <Button className={classesx.saveBtn} onClick={handleSubmit}>
+            <Button className={classes.saveBtn} onClick={handleSubmit}>
               Submit
             </Button>
-            <Button onClick={handleClose(false)} className={classesx.saveBtn}>
+            <Button onClick={handleClose(false)} className={classes.saveBtn}>
               Cancel
             </Button>
           </DialogActions>
-          <Snackbar
-            open={openWarning}
-            autoHideDuration={6000}
-            onClose={handleClose}
-            anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-          >
-            <Alert onClose={handleCloseWarning} severity="warning">
-              {' '}
-              {error}{' '}
-            </Alert>
-          </Snackbar>
+          <AlertMessage open={openWarning} handleClose={handleCloseWarning} severity="warning" message={error} />
         </Container>
       </Drawer>
     </React.Fragment>
   )
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(CreateLocation)
+export default CreateLocation

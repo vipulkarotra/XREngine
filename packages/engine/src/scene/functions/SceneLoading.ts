@@ -1,392 +1,107 @@
-import { AmbientLight, DirectionalLight, HemisphereLight, Object3D, PointLight, SpotLight } from 'three'
-import { switchCameraMode } from '../../avatar/functions/switchCameraMode'
 import { isClient } from '../../common/functions/isClient'
 import { Engine } from '../../ecs/classes/Engine'
-import { EngineEvents } from '../../ecs/classes/EngineEvents'
 import { Entity } from '../../ecs/classes/Entity'
-import { addComponent, createEntity, getComponent, removeComponent } from '../../ecs/functions/EntityFunctions'
-import { NameComponent } from '../components/NameComponent'
-import { InteractableComponent } from '../../interaction/components/InteractableComponent'
-import { Network } from '../../networking/classes/Network'
-import { createParticleEmitterObject } from '../../particles/functions/particleHelpers'
-import { createCollider } from '../../physics/functions/createCollider'
-import { EngineRenderer } from '../../renderer/WebGLRendererSystem'
-import { CopyTransformComponent } from '../../transform/components/CopyTransformComponent'
-import { addObject3DComponent } from '../functions/addObject3DComponent'
-import { createDirectionalLight } from '../functions/createDirectionalLight'
-import { createGround } from '../functions/createGround'
-import { createMap } from '../functions/createMap'
-import { createAudio, createMediaServer, createVideo, createVolumetric } from '../functions/createMedia'
-import { createPortal } from '../functions/createPortal'
-import { createSkybox } from '../functions/createSkybox'
-import { createTransformComponent } from '../functions/createTransformComponent'
-import { createTriggerVolume } from '../functions/createTriggerVolume'
-import { configureCSM, handleRendererSettings } from '../functions/handleRendererSettings'
-import { loadGLTFModel } from '../functions/loadGLTFModel'
-import { loadModelAnimation } from '../functions/loadModelAnimation'
-import { setCameraProperties } from '../functions/setCameraProperties'
-import { setEnvMap } from '../functions/setEnvMap'
-import { setFog } from '../functions/setFog'
-import { Clouds } from '../classes/Clouds'
-import Image from '../classes/Image'
-import { Ocean } from '../classes/Ocean'
-import { PositionalAudioSettingsComponent } from '../components/AudioSettingsComponent'
-import { PersistTagComponent } from '../components/PersistTagComponent'
-import { ScenePreviewCameraTagComponent } from '../components/ScenePreviewCamera'
-import { ShadowComponent } from '../components/ShadowComponent'
-import { SpawnPointComponent } from '../components/SpawnPointComponent'
-import { UpdatableComponent } from '../components/UpdatableComponent'
-import { VisibleComponent } from '../components/VisibleComponent'
-import { WalkableTagComponent } from '../components/Walkable'
-import { BoxColliderProps } from '../interfaces/BoxColliderProps'
-import { SceneData } from '../interfaces/SceneData'
-import { SceneDataComponent } from '../interfaces/SceneDataComponent'
-import { Water } from '../classes/Water'
+import { addComponent, getComponent, hasComponent } from '../../ecs/functions/ComponentFunctions'
+import { createEntity } from '../../ecs/functions/EntityFunctions'
 import { TransformComponent } from '../../transform/components/TransformComponent'
-import { Object3DComponent } from '../components/Object3DComponent'
-import { UserdataComponent } from '../components/UserdataComponent'
-import { Interior } from '../classes/Interior'
+import { NameComponent } from '../components/NameComponent'
+import { EntityNodeComponent } from '../components/EntityNodeComponent'
+import { SceneJson, ComponentJson, EntityJson } from '@xrengine/common/src/interfaces/SceneInterface'
+import { useWorld } from '../../ecs/functions/SystemHooks'
+import EntityTree, { EntityTreeNode } from '../../ecs/classes/EntityTree'
+import { updateRenderSetting, resetEngineRenderer } from './loaders/RenderSettingsFunction'
+import { registerDefaultSceneFunctions } from './registerSceneFunctions'
+import { ScenePrefabTypes } from './registerPrefabs'
+import { DisableTransformTagComponent } from '../../transform/components/DisableTransformTagComponent'
+import { SceneTagComponent, SCENE_COMPONENT_SCENE_TAG } from '../components/SceneTagComponent'
+import { reparentObject3D } from './ReparentFunction'
+import { dispatchLocal } from '../../networking/functions/dispatchFrom'
+import { EngineActions } from '../../ecs/classes/EngineService'
+import { delay } from '../../common/functions/delay'
 
-export enum SCENE_ASSET_TYPES {
-  ENVMAP
+export const createNewEditorNode = (entity: Entity, prefabType: ScenePrefabTypes): void => {
+  const world = useWorld()
+
+  const components = world.scenePrefabRegistry.get(prefabType)
+  if (!components) return console.warn(`[createNewEditorNode]: ${prefabType} is not a prefab`)
+
+  loadSceneEntity(new EntityTreeNode(entity), { name: prefabType, components })
 }
 
-export type ScenePropertyType = {
-  directionalLights: DirectionalLight[]
-  isCSMEnabled: boolean
+/**
+ * Loads a scene from scene json
+ * @param sceneData
+ */
+export const loadSceneFromJSON = async (sceneData: SceneJson, world = useWorld()) => {
+  const entityMap = {} as { [key: string]: EntityTreeNode }
+  Engine.sceneLoadPromises = []
+  dispatchLocal(EngineActions.sceneLoading(true) as any)
+
+  // reset renderer settings for if we are teleporting and the new scene does not have an override
+  resetEngineRenderer(true)
+
+  Object.keys(sceneData.entities).forEach((key) => {
+    entityMap[key] = new EntityTreeNode(createEntity(), key)
+    loadSceneEntity(entityMap[key], sceneData.entities[key])
+  })
+
+  const tree = world.entityTree
+
+  Object.keys(sceneData.entities).forEach((key) => {
+    const sceneEntity = sceneData.entities[key]
+    const node = entityMap[key]
+    tree.addEntityNode(node, sceneEntity.parent ? entityMap[sceneEntity.parent] : undefined)
+  })
+
+  addComponent(world.entityTree.rootNode.entity, SceneTagComponent, {})
+  if (Engine.isEditor) {
+    getComponent(world.entityTree.rootNode.entity, EntityNodeComponent).components.push(SCENE_COMPONENT_SCENE_TAG)
+  }
+
+  await Promise.all(Engine.sceneLoadPromises)
+
+  Engine.sceneLoaded = true
+
+  // Configure CSM
+  updateRenderSetting(world.entityTree.rootNode.entity)
+  dispatchLocal(EngineActions.sceneLoaded(true) as any)
 }
 
-export class WorldScene {
-  loadedModels = 0
-  loaders: Promise<void>[] = []
-  static callbacks: any
-  static isLoading = false
+/**
+ * Loads all the components from scene json for an entity
+ * @param {EntityTreeNode} entityNode
+ * @param {EntityJson} sceneEntity
+ */
+export const loadSceneEntity = (entityNode: EntityTreeNode, sceneEntity: EntityJson): Entity => {
+  addComponent(entityNode.entity, NameComponent, { name: sceneEntity.name })
+  if (Engine.isEditor) addComponent(entityNode.entity, EntityNodeComponent, { components: [] })
 
-  constructor(private onProgress?: Function) {}
+  sceneEntity.components.forEach((component) => {
+    loadComponent(entityNode.entity, component)
+  })
 
-  loadScene = (scene: SceneData): Promise<void> => {
-    WorldScene.callbacks = {}
-    WorldScene.isLoading = true
+  if (!hasComponent(entityNode.entity, TransformComponent))
+    addComponent(entityNode.entity, DisableTransformTagComponent, {})
 
-    // reset renderer settings for if we are teleporting and the new scene does not have an override
-    configureCSM(null, true)
-    handleRendererSettings(null, true)
+  return entityNode.entity
+}
 
-    const sceneProperty: ScenePropertyType = {
-      directionalLights: [],
-      isCSMEnabled: true
-    }
+export const loadComponent = (entity: Entity, component: ComponentJson): void => {
+  // remove '-1', '-2' etc suffixes
+  const name = component.name.replace(/(-\d+)|(\s)/g, '')
+  const world = useWorld()
 
-    Object.keys(scene.entities).forEach((key) => {
-      const sceneEntity = scene.entities[key]
-      const entity = createEntity()
+  const deserializer = world.sceneLoadingRegistry.get(name)?.deserialize
 
-      addComponent(entity, NameComponent, { name: sceneEntity.name })
-
-      sceneEntity.components.forEach((component) => {
-        component.data.sceneEntityId = sceneEntity.entityId
-        this.loadComponent(entity, component, sceneProperty)
-      })
-    })
-
-    return Promise.all(this.loaders)
-      .then(() => {
-        WorldScene.isLoading = false
-        Engine.sceneLoaded = true
-
-        configureCSM(sceneProperty.directionalLights, !sceneProperty.isCSMEnabled)
-
-        EngineEvents.instance.dispatchEvent({ type: EngineEvents.EVENTS.SCENE_LOADED })
-      })
-      .catch((err) => {
-        console.error('Error while loading the scene entities =>', err)
-      })
+  if (deserializer) {
+    deserializer(entity, component)
   }
+}
 
-  _onModelLoaded = () => {
-    this.loadedModels++
-    if (typeof this.onProgress === 'function') this.onProgress(this.loaders.length - this.loadedModels)
-  }
-
-  static pushAssetTypeLoadCallback = (assetType: SCENE_ASSET_TYPES, callback: () => void): void => {
-    if (!WorldScene.callbacks[assetType]) WorldScene.callbacks[assetType] = []
-    WorldScene.callbacks[assetType].push(callback)
-  }
-
-  static executeAssetTypeLoadCallback = (assetType: SCENE_ASSET_TYPES, ...args: any[]): void => {
-    WorldScene.callbacks[assetType]?.forEach((cb) => {
-      cb(...args)
-    })
-  }
-
-  loadComponent = (entity: Entity, component: SceneDataComponent, sceneProperty: ScenePropertyType): void => {
-    // remove '-1', '-2' etc suffixes
-    const name = component.name.replace(/(-\d+)|(\s)/g, '')
-    switch (name) {
-      case 'mtdata':
-        if (isClient && Engine.isBot) {
-          const { meta_data } = component.data
-          console.log('scene_metadata|' + meta_data)
-        }
-        break
-
-      case '_metadata':
-        {
-          addObject3DComponent(entity, new Object3D(), component.data)
-          addComponent(entity, InteractableComponent, { data: { action: '_metadata' } })
-          const transform = getComponent(entity, TransformComponent)
-
-          if (isClient && Engine.isBot) {
-            const { _data } = component.data
-            const { x, y, z } = transform.data['position']
-            console.log('metadata|' + x + ',' + y + ',' + z + '|' + _data)
-          }
-        }
-        break
-
-      case 'userdata':
-        addComponent(entity, UserdataComponent, { data: component.data })
-        break
-
-      case 'ambient-light':
-        addObject3DComponent(entity, new AmbientLight(), component.data)
-        break
-
-      case 'directional-light':
-        createDirectionalLight(entity, component, sceneProperty)
-        break
-
-      case 'hemisphere-light':
-        addObject3DComponent(entity, new HemisphereLight(), component.data)
-        break
-
-      case 'point-light':
-        addObject3DComponent(entity, new PointLight(), component.data)
-        break
-
-      case 'collidable':
-        // console.warn("'Collidable' is not implemented");
-        break
-
-      case 'floor-plan':
-        break
-
-      case 'simple-materials':
-        Engine.simpleMaterials = component.data.simpleMaterials
-        break
-
-      case 'gltf-model':
-        loadGLTFModel(this, entity, component, sceneProperty)
-        break
-
-      case 'loop-animation':
-        loadModelAnimation(entity, component)
-        break
-
-      case 'interact':
-        if (component.data.interactable) addComponent(entity, InteractableComponent, { data: component.data })
-        break
-
-      case 'ground-plane':
-        createGround(entity, component.data)
-        break
-
-      case 'image':
-        addObject3DComponent(entity, new Image(), component.data)
-        break
-
-      case 'video':
-        // if livestream, server will send the video info to the client
-        if (isClient) {
-          // if(!component.data.isLivestream) {
-          createVideo(entity, component.data)
-          // }
-          // addComponent(entity, LivestreamComponent)
-          // } else if(component.data.isLivestream) {
-          // @todo
-          // addComponent(entity, LivestreamProxyComponent, { src: component.data.src })
-        } else {
-          createMediaServer(entity, component.data)
-        }
-        break
-
-      case 'map':
-        if (isClient) this.loaders.push(createMap(entity, component.data))
-        break
-
-      case 'audio':
-        if (isClient) createAudio(entity, component.data)
-        else createMediaServer(entity, component.data)
-        break
-
-      case 'volumetric':
-        if (isClient) createVolumetric(entity, component.data)
-        else createMediaServer(entity, component.data)
-        break
-
-      case 'spot-light':
-        addObject3DComponent(entity, new SpotLight(), component.data)
-        break
-
-      case 'transform':
-        createTransformComponent(entity, component.data)
-        break
-
-      case 'walkable':
-        addComponent(entity, WalkableTagComponent, {})
-        break
-
-      case 'fog':
-        setFog(entity, component.data)
-        break
-
-      case 'skybox':
-        createSkybox(entity, component.data as any)
-        break
-
-      case 'audio-settings':
-        addComponent(entity, PositionalAudioSettingsComponent, component.data)
-        break
-
-      case 'renderer-settings':
-        handleRendererSettings(component.data)
-        sceneProperty.isCSMEnabled = component.data.csm
-        break
-
-      case 'spawn-point':
-        addComponent(entity, SpawnPointComponent, {})
-        break
-
-      case 'scene-preview-camera':
-        addComponent(entity, ScenePreviewCameraTagComponent, {})
-        if (isClient && Engine.activeCameraEntity) {
-          addComponent(Engine.activeCameraEntity, CopyTransformComponent, { input: entity })
-        }
-        break
-
-      case 'shadow':
-        addComponent(entity, ShadowComponent, {
-          castShadow: component.data.cast,
-          receiveShadow: component.data.receive
-        })
-        break
-
-      case 'collider': {
-        // TODO
-        break
-      }
-
-      case 'box-collider': {
-        const boxColliderProps: BoxColliderProps = component.data
-        const transform = getComponent(entity, TransformComponent)
-        createCollider(
-          entity,
-          {
-            userData: {
-              type: 'box',
-              ...boxColliderProps
-            }
-          },
-          transform.position,
-          transform.rotation,
-          transform.scale // convert from half extents to full extents
-        )
-        if (
-          boxColliderProps.removeMesh === 'true' ||
-          (typeof boxColliderProps.removeMesh === 'boolean' && boxColliderProps.removeMesh === true)
-        ) {
-          const obj = getComponent(entity, Object3DComponent)
-          if (obj?.value) {
-            if (obj.value.parent) obj.value.removeFromParent()
-            removeComponent(entity, Object3DComponent)
-          }
-        }
-        break
-      }
-
-      case 'trigger-volume':
-        createTriggerVolume(entity, component.data)
-        break
-
-      case 'link':
-        addObject3DComponent(entity, new Object3D(), component.data)
-        addComponent(entity, InteractableComponent, { data: { action: 'link' } })
-        break
-
-      case 'particle-emitter':
-        createParticleEmitterObject(entity, component.data)
-        break
-
-      case 'clouds':
-        isClient && addObject3DComponent(entity, new Clouds(), component.data)
-        isClient && addComponent(entity, UpdatableComponent, {})
-        break
-
-      case 'ocean':
-        isClient && addObject3DComponent(entity, new Ocean(), component.data)
-        isClient && addComponent(entity, UpdatableComponent, {})
-        break
-
-      case 'water':
-        isClient && addObject3DComponent(entity, new Water(), component.data)
-        isClient && addComponent(entity, UpdatableComponent, {})
-        break
-
-      case 'interior':
-        isClient && addObject3DComponent(entity, new Interior(), component.data)
-        break
-
-      case 'postprocessing':
-        EngineRenderer.instance?.configurePostProcessing(component.data.options)
-        break
-
-      case 'cameraproperties':
-        if (isClient) {
-          EngineEvents.instance.once(EngineEvents.EVENTS.CLIENT_USER_LOADED, async () => {
-            setCameraProperties(Network.instance.localClientEntity, component.data)
-          })
-        }
-        break
-
-      case 'envmap':
-        setEnvMap(entity, component.data)
-        break
-
-      case 'persist':
-        if (isClient) addComponent(entity, PersistTagComponent, {})
-        break
-
-      case 'portal':
-        createPortal(entity, component.data)
-        break
-
-      /* intentionally empty - these are only for the editor */
-      case 'includeInCubemapBake':
-      case 'cubemapbake':
-      case 'group':
-        break
-
-      case 'visible':
-        if (isClient) {
-          addComponent(entity, VisibleComponent, { value: component.data.visible })
-        }
-        break
-
-      /* deprecated */
-      case 'mesh-collider':
-        break
-
-      case 'mdata':
-        console.log('[SceneLoading]: Scene metadata not implemented')
-        break
-
-      default:
-        return console.warn("Couldn't load Component", name)
-    }
-  }
-
-  static load = (scene: SceneData, onProgress?: Function): Promise<void> => {
-    const world = new WorldScene(onProgress)
-    return world.loadScene(scene)
-  }
+export const registerSceneLoadPromise = (promise: Promise<any>) => {
+  Engine.sceneLoadPromises.push(promise)
+  promise.then(() => {
+    Engine.sceneLoadPromises.splice(Engine.sceneLoadPromises.indexOf(promise), 1)
+    dispatchLocal(EngineActions.sceneEntityLoaded(Engine.sceneLoadPromises.length) as any)
+  })
 }

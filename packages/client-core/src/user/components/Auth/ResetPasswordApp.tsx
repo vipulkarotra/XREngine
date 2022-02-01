@@ -1,24 +1,23 @@
 import React, { useRef, useState } from 'react'
-import Button from '@material-ui/core/Button'
-import Typography from '@material-ui/core/Typography'
-import Container from '@material-ui/core/Container'
+import Button from '@mui/material/Button'
+import Typography from '@mui/material/Typography'
+import Container from '@mui/material/Container'
 import { EmptyLayout } from '../../../common/components/Layout/EmptyLayout'
-import { resetPassword } from '../../reducers/auth/service'
+import { AuthService } from '../../services/AuthService'
 import styles from './Auth.module.scss'
-import OutlinedInput from '@material-ui/core/OutlinedInput'
-import InputAdornment from '@material-ui/core/InputAdornment'
-import IconButton from '@material-ui/core/IconButton'
-import { Visibility, VisibilityOff } from '@material-ui/icons'
+import OutlinedInput from '@mui/material/OutlinedInput'
+import InputAdornment from '@mui/material/InputAdornment'
+import IconButton from '@mui/material/IconButton'
+import { Visibility, VisibilityOff } from '@mui/icons-material'
 import { useTranslation } from 'react-i18next'
 
 interface Props {
-  resetPassword: typeof resetPassword
   token: string
   completeAction: () => void
 }
 
 export const ResetPassword = (props: Props): any => {
-  const { resetPassword, token, completeAction } = props
+  const { token, completeAction } = props
   const initialState = { password: '', isSubmitted: false }
   const [state, setState] = useState(initialState)
   const { t } = useTranslation()
@@ -29,7 +28,7 @@ export const ResetPassword = (props: Props): any => {
   }
   const handleReset = (e: any): void => {
     e.preventDefault()
-    resetPassword(token, state.password)
+    AuthService.resetPassword(token, state.password)
     setState({ ...state, isSubmitted: true })
   }
 
@@ -46,12 +45,12 @@ export const ResetPassword = (props: Props): any => {
   }
 
   const password = useRef<HTMLInputElement>()
-  const confirm_password = useRef<HTMLInputElement>()
+  const confirm_password = useRef<HTMLInputElement>(null!)
   function validatePassword() {
-    if (password.current.value != confirm_password.current.value) {
-      confirm_password.current.setCustomValidity(t('user:auth.resetPassword.passwordNotMatch'))
+    if (password?.current?.value != confirm_password?.current.value) {
+      confirm_password?.current.setCustomValidity(t('user:auth.resetPassword.passwordNotMatch'))
     } else {
-      confirm_password.current.setCustomValidity('')
+      confirm_password?.current.setCustomValidity('')
     }
   }
 
@@ -98,6 +97,7 @@ export const ResetPassword = (props: Props): any => {
                         onClick={handleClickShowPassword}
                         onMouseDown={handleMouseDownPassword}
                         color="secondary"
+                        size="large"
                       >
                         {values.showPassword ? <Visibility /> : <VisibilityOff />}
                       </IconButton>
@@ -123,6 +123,7 @@ export const ResetPassword = (props: Props): any => {
                         onClick={handleClickShowPasswordConfirm}
                         onMouseDown={handleMouseDownPassword}
                         color="secondary"
+                        size="large"
                       >
                         {values.showPasswordConfirm ? <Visibility /> : <VisibilityOff />}
                       </IconButton>

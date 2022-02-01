@@ -1,51 +1,34 @@
-import React from 'react'
-import Table from '@material-ui/core/Table'
-import TableBody from '@material-ui/core/TableBody'
-import TableCell from '@material-ui/core/TableCell'
-import TableContainer from '@material-ui/core/TableContainer'
-import TableHead from '@material-ui/core/TableHead'
-import TablePagination from '@material-ui/core/TablePagination'
-import TableRow from '@material-ui/core/TableRow'
-import { removeUserAdmin, fetchUsersAsAdmin } from '../../reducers/admin/user/service'
-import { refetchSingleUserAdmin } from '../../reducers/admin/service'
-import { bindActionCreators, Dispatch } from 'redux'
-import { connect } from 'react-redux'
-import { selectAuthState } from '../../../user/reducers/auth/selector'
-import { selectAdminUserState } from '../../reducers/admin/user/selector'
-import Dialog from '@material-ui/core/Dialog'
-import DialogActions from '@material-ui/core/DialogActions'
-import DialogTitle from '@material-ui/core/DialogTitle'
-import Button from '@material-ui/core/Button'
+import React, { useState } from 'react'
+import { useAuthState } from '../../../user/services/AuthService'
+import ConfirmModel from '../../common/ConfirmModel'
+import { useFetchUsersAsAdmin } from '../../common/hooks/User.hooks'
+import TableComponent from '../../common/Table'
+import { UserService, USER_PAGE_LIMIT, useUserState } from '../../services/UserService'
+import { useStyles } from '../../styles/ui'
+import { userColumns, UserData, UserProps } from './Variables'
 import ViewUser from './ViewUser'
-import { useStyle, useStyles } from './styles'
-import { columns, Data, Props } from './Variables'
 
-const mapStateToProps = (state: any): any => {
-  return {
-    authState: selectAuthState(state),
-    adminUserState: selectAdminUserState(state)
-  }
-}
+const UserTable = (props: UserProps) => {
+  const { search } = props
+  const classes = useStyles()
+  const [page, setPage] = useState(0)
+  const [rowsPerPage, setRowsPerPage] = useState(USER_PAGE_LIMIT)
+  const [popConfirmOpen, setPopConfirmOpen] = useState(false)
+  const [userId, setUserId] = useState('')
+  const [userName, setUserName] = useState('')
+  const [viewModel, setViewModel] = useState(false)
+  const [userAdmin, setUserAdmin] = useState(null)
+  const authState = useAuthState()
+  const user = authState.user
+  const adminUserState = useUserState()
+  const adminUsers = adminUserState.users.value
+  const adminUserCount = adminUserState.total
 
-const mapDispatchToProps = (dispatch: Dispatch): any => ({
-  removeUserAdmin: bindActionCreators(removeUserAdmin, dispatch),
-  fetchUsersAsAdmin: bindActionCreators(fetchUsersAsAdmin, dispatch),
-  refetchSingleUserAdmin: bindActionCreators(refetchSingleUserAdmin, dispatch)
-})
+  useFetchUsersAsAdmin(user, adminUserState, UserService, search)
 
-const UserTable = (props: Props) => {
-  const { removeUserAdmin, refetchSingleUserAdmin, fetchUsersAsAdmin, authState, adminUserState } = props
-  const classes = useStyle()
-  const classx = useStyles()
-  const [page, setPage] = React.useState(0)
-  const [rowsPerPage, setRowsPerPage] = React.useState(12)
-  const [popConfirmOpen, setPopConfirmOpen] = React.useState(false)
-  const [userId, setUserId] = React.useState('')
-  const [viewModel, setViewModel] = React.useState(false)
-  const [userAdmin, setUserAdmin] = React.useState('')
-  const user = authState.get('user')
-  const adminUsers = adminUserState.get('users').get('users')
   const handlePageChange = (event: unknown, newPage: number) => {
+    const incDec = page < newPage ? 'increment' : 'decrement'
+    UserService.fetchUsersAsAdmin(incDec)
     setPage(newPage)
   }
 
@@ -53,42 +36,33 @@ const UserTable = (props: Props) => {
     setRowsPerPage(+event.target.value)
     setPage(0)
   }
-  React.useEffect(() => {
-    const fetchData = async () => {
-      await fetchUsersAsAdmin()
-    }
-    if (adminUserState.get('users').get('updateNeeded') === true && user.id) fetchData()
-  }, [adminUserState, user, fetchUsersAsAdmin])
-
-  const openViewModel = (open: boolean, user: any) => (event: React.KeyboardEvent | React.MouseEvent) => {
-    refetchSingleUserAdmin()
-    if (
-      event.type === 'keydown' &&
-      ((event as React.KeyboardEvent).key === 'Tab' || (event as React.KeyboardEvent).key === 'Shift')
-    ) {
-      return
-    }
-    setUserAdmin(user)
-    setViewModel(open)
-  }
 
   const closeViewModel = (open) => {
     setViewModel(open)
   }
 
+  const handleCloseModel = () => {
+    setPopConfirmOpen(false)
+  }
+
+  const submitDeleteUser = async () => {
+    await UserService.removeUserAdmin(userId)
+    setPopConfirmOpen(false)
+  }
+
   const createData = (
     id: any,
-    user: any,
+    el: any,
     name: string,
-    avatar: string,
-    status: string,
-    location: string,
-    inviteCode: string,
-    instanceId: string
-  ): Data => {
+    avatar: string | JSX.Element,
+    status: string | JSX.Element,
+    location: string | JSX.Element,
+    inviteCode: string | JSX.Element,
+    instanceId: string | JSX.Element
+  ): UserData => {
     return {
       id,
-      user,
+      el,
       name,
       avatar,
       status,
@@ -97,24 +71,34 @@ const UserTable = (props: Props) => {
       instanceId,
       action: (
         <>
-          <a href="#h" className={classes.actionStyle} onClick={openViewModel(true, user)}>
-            <span className={classes.spanWhite}>View</span>
-          </a>
           <a
             href="#h"
             className={classes.actionStyle}
             onClick={() => {
-              setPopConfirmOpen(true)
-              setUserId(id)
+              setUserAdmin(el)
+              setViewModel(true)
             }}
           >
-            {' '}
-            <span className={classes.spanDange}>Delete</span>{' '}
+            <span className={classes.spanWhite}>View</span>
           </a>
+          {user.id.value !== id && (
+            <a
+              href="#h"
+              className={classes.actionStyle}
+              onClick={() => {
+                setUserId(id)
+                setUserName(name)
+                setPopConfirmOpen(true)
+              }}
+            >
+              <span className={classes.spanDange}>Delete</span>
+            </a>
+          )}
         </>
       )
     }
   }
+
   const rows = adminUsers.map((el) => {
     const loc = el.party?.id ? el.party.location : null
     const loca = loc ? (
@@ -141,80 +125,29 @@ const UserTable = (props: Props) => {
     )
   })
 
-  const count = rows.size ? rows.size : rows.length
   return (
-    <div className={classes.root}>
-      <TableContainer className={classes.container}>
-        <Table stickyHeader aria-label="sticky table">
-          <TableHead>
-            <TableRow>
-              {columns.map((column) => (
-                <TableCell
-                  key={column.id}
-                  align={column.align}
-                  style={{ minWidth: column.minWidth }}
-                  className={classx.tableCellHeader}
-                >
-                  {column.label}
-                </TableCell>
-              ))}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {rows.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((row, id) => {
-              return (
-                <TableRow hover role="checkbox" tabIndex={-1} key={row.id}>
-                  {columns.map((column) => {
-                    const value = row[column.id]
-                    return (
-                      <TableCell key={column.id} align={column.align} className={classx.tableCellBody}>
-                        {value}
-                      </TableCell>
-                    )
-                  })}
-                </TableRow>
-              )
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
-      <TablePagination
-        rowsPerPageOptions={[12]}
-        component="div"
-        count={count || 12}
-        rowsPerPage={rowsPerPage}
+    <React.Fragment>
+      <TableComponent
+        rows={rows}
+        column={userColumns}
         page={page}
-        onPageChange={handlePageChange}
-        onRowsPerPageChange={handleRowsPerPageChange}
-        className={classx.tableFooter}
+        rowsPerPage={rowsPerPage}
+        count={adminUserCount.value}
+        handlePageChange={handlePageChange}
+        handleRowsPerPageChange={handleRowsPerPageChange}
       />
-      <Dialog
-        open={popConfirmOpen}
-        onClose={() => setPopConfirmOpen(false)}
-        aria-labelledby="alert-dialog-title"
-        aria-describedby="alert-dialog-description"
-        classes={{ paper: classes.paperDialog }}
-      >
-        <DialogTitle id="alert-dialog-title">Confirm to delete this user!</DialogTitle>
-        <DialogActions>
-          <Button onClick={() => setPopConfirmOpen(false)} className={classes.spanNone}>
-            Cancel
-          </Button>
-          <Button
-            className={classes.spanDange}
-            onClick={async () => {
-              await removeUserAdmin(userId)
-              setPopConfirmOpen(false)
-            }}
-            autoFocus
-          >
-            Confirm
-          </Button>
-        </DialogActions>
-      </Dialog>
-      {userAdmin && <ViewUser openView={viewModel} userAdmin={userAdmin} closeViewModel={closeViewModel} />}
-    </div>
+      <ConfirmModel
+        popConfirmOpen={popConfirmOpen}
+        handleCloseModel={handleCloseModel}
+        submit={submitDeleteUser}
+        name={userName}
+        label={'user'}
+      />
+      {userAdmin && viewModel && (
+        <ViewUser openView={viewModel} userAdmin={userAdmin} closeViewModel={closeViewModel} />
+      )}
+    </React.Fragment>
   )
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(UserTable)
+export default UserTable

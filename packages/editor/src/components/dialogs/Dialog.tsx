@@ -1,8 +1,6 @@
 import React, { useCallback } from 'react'
-import PropTypes from 'prop-types'
 import { Button, SecondaryButton } from '../inputs/Button'
 import styled from 'styled-components'
-import i18n from 'i18next'
 
 /**
  * DialogContainer used as container element for DialogHeader, DialogContent and DialogBottomNav.
@@ -13,7 +11,6 @@ import i18n from 'i18next'
 const DialogContainer = (styled as any).form`
   display: flex;
   flex-direction: column;
-  flex: 1;
   border-radius: 4px;
   background-color: #282c31;
   max-width: 800px;
@@ -39,6 +36,7 @@ const DialogHeader = (styled as any).div`
   background: black;
   border-top-left-radius: inherit;
   border-top-right-radius: inherit;
+  color: white;
 
   > * {
     display: flex;
@@ -143,7 +141,6 @@ export function Dialog(props: Props) {
     },
     [onConfirm]
   )
-  //@ts-ignore
   const button = (
     <Button type="submit" onClick={tag === 'form' ? null : onConfirm}>
       {confirmLabel}
@@ -160,46 +157,12 @@ export function Dialog(props: Props) {
       {(onConfirm || onCancel || bottomNav) && (
         <DialogBottomNav>
           {bottomNav}
-          {onCancel && <SecondaryButton onClick={onCancel}>{cancelLabel}</SecondaryButton>}
+          {onCancel && <SecondaryButton onClick={onCancel}>{cancelLabel || 'Cancel'}</SecondaryButton>}
           {onConfirm && button}
         </DialogBottomNav>
       )}
     </DialogContainer>
   )
 }
-/**
- * propTypes declared for Dialog component.
- *
- * @author Robert Long
- * @param {string} tag
- * @param {string} title
- * @param {func} onCancel
- * @param {string} cancelLabel
- * @param {func} onConfirm
- * @param {string} confirmLabel
- * @param {node} bottomNav
- * @param {node} children
- */
-Dialog.propTypes = {
-  tag: PropTypes.string,
-  title: PropTypes.string,
-  onCancel: PropTypes.func,
-  cancelLabel: PropTypes.string,
-  onConfirm: PropTypes.func,
-  confirmLabel: PropTypes.string,
-  bottomNav: PropTypes.node,
-  children: PropTypes.node
-}
 
-/**
- * defaultProps defined for  Dialog component
- *
- * @author Robert Long
- */
-Dialog.defaultProps = {
-  tag: 'form',
-  title: i18n.t('editor:dialog.title') || 'Editor',
-  confirmLabel: i18n.t('editor:dialog.lbl-confirm') || 'Ok',
-  cancelLabel: i18n.t('editor:dialog.lbl-cancel') || 'Cancel'
-}
 export default Dialog

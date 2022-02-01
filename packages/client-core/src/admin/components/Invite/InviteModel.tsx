@@ -1,48 +1,29 @@
 import React, { useEffect } from 'react'
-import Backdrop from '@material-ui/core/Backdrop'
-import Button from '@material-ui/core/Button'
-import Fade from '@material-ui/core/Fade'
-import FormGroup from '@material-ui/core/FormGroup'
-import Modal from '@material-ui/core/Modal'
-import TextField from '@material-ui/core/TextField'
-import Typography from '@material-ui/core/Typography'
+import Button from '@mui/material/Button'
+import Fade from '@mui/material/Fade'
+import FormGroup from '@mui/material/FormGroup'
+import Modal from '@mui/material/Modal'
+import TextField from '@mui/material/TextField'
+import Typography from '@mui/material/Typography'
 import classNames from 'classnames'
 import styles from '../Admin.module.scss'
-import { sendInvite } from '../../../social/reducers/invite/service'
-import { retrieveInvites } from '../../../social/reducers/inviteType/service'
-import { selectInviteState } from '../../../social/reducers/invite/selector'
-import { selectInviteTypesState } from '../../../social/reducers/inviteType/selector'
-import { bindActionCreators, Dispatch } from 'redux'
-import { connect } from 'react-redux'
+import { InviteService } from '../../../social/services/InviteService'
+import { InviteTypeService } from '../../../social/services/InviteTypeService'
+import { useInviteTypeState } from '../../../social/services/InviteTypeService'
+import { useDispatch } from '../../../store'
 import { Dropdown } from 'semantic-ui-react'
-import Snackbar from '@material-ui/core/Snackbar'
+import Snackbar, { SnackbarCloseReason } from '@mui/material/Snackbar'
 import _ from 'lodash'
-import Grid from '@material-ui/core/Grid'
-import MuiAlert, { AlertProps } from '@material-ui/lab/Alert'
+import Grid from '@mui/material/Grid'
+import MuiAlert, { AlertProps } from '@mui/material/Alert'
 import { ValidatorForm, TextValidator } from 'react-material-ui-form-validator'
 import { useHistory } from 'react-router-dom'
-
+import makeStyles from '@mui/styles/makeStyles'
 interface Props {
   open: boolean
   handleClose: any
-  sendInvite?: any
-  retrieveInvites?: any
-  inviteTypeData?: any
   users: any
 }
-
-const mapStateToProps = (state: any): any => {
-  return {
-    receivedInvites: selectInviteState(state),
-    sentInvites: selectInviteState(state),
-    inviteTypeData: selectInviteTypesState(state)
-  }
-}
-
-const mapDispatchToProps = (dispatch: Dispatch): any => ({
-  sendInvite: bindActionCreators(sendInvite, dispatch),
-  retrieveInvites: bindActionCreators(retrieveInvites, dispatch)
-})
 
 function Alert(props: AlertProps) {
   return <MuiAlert elevation={6} variant="filled" {...props} />
@@ -56,19 +37,81 @@ const phoneRegex = /^[0-9]{10}$/
  * Dev comment: => I don't know use of Token in the form field
  * @param props
  */
-const InviteModel = (props: Props) => {
-  const { open, handleClose, sendInvite, retrieveInvites, inviteTypeData, users } = props
 
+const useStyles = makeStyles((theme) => ({
+  root: {
+    '& .MuiFilledInput-root': {
+      background: 'rgb(232, 241, 250)'
+    }
+  },
+  paper: {
+    width: '40%',
+    backgroundColor: '#43484F',
+    color: '#f1f1f1'
+  },
+  createInput: {
+    padding: '2px 4px',
+    display: 'flex',
+    alignItems: 'center',
+    //width: "45vw",
+    marginTop: '10px',
+    marginBottom: '15px',
+    background: '#343b41',
+    border: '1px solid #23282c',
+    color: '#f1f1f1 !important'
+  },
+  marginTp: {
+    marginTop: '20%'
+  },
+  texAlign: {
+    textAlign: 'center'
+  },
+  input: {
+    marginLeft: 1,
+    flex: 1,
+    color: '#f1f1f1'
+  },
+  select: {
+    color: '#f1f1f1 !important'
+  },
+  selectPaper: {
+    background: '#343b41',
+    color: '#f1f1f1'
+  }
+}))
+
+const InviteModel = (props: Props) => {
+  const classes = useStyles()
+  const { open, handleClose, users } = props
+  console.log(open)
   const router = useHistory()
   const [currency, setCurrency] = React.useState('friend')
-  const inviteType = inviteTypeData.get('inviteTypeData').get('inviteType')
+  const inviteTypeData = useInviteTypeState()
+  const inviteType = inviteTypeData.inviteTypeData.invitesType?.value
   const [targetUser, setTargetUser] = React.useState('')
   const [token, setToken] = React.useState('')
   const [passcode, setPasscode] = React.useState('')
   const [warning, setWarning] = React.useState('')
   const [openSnabar, setOpenSnabar] = React.useState(false)
   const [providerType, setProviderType] = React.useState('email')
-  const currencies = []
+  // const [openInvite ,setOpenInvite] = React.useState(false);
+  const [openWarning, setOpenWarning] = React.useState(false)
+  const [error, setError] = React.useState('')
+  const dispatch = useDispatch()
+  const handleCloseWarning = (event, reason) => {
+    if (reason === 'clickaway') {
+      return
+    }
+    setOpenWarning(false)
+  }
+
+  interface Currency {
+    value: string
+    label: string
+  }
+
+  const currencies: Currency[] = []
+
   const provide = [
     {
       value: 'email',
@@ -133,7 +176,7 @@ const InviteModel = (props: Props) => {
       targetObjectId: targetUser[0]
     }
     if (token && currency && targetUser) {
-      await sendInvite(data)
+      await InviteService.sendInvite(data)
       refreshData()
       handleClose()
     } else {
@@ -142,7 +185,7 @@ const InviteModel = (props: Props) => {
     }
   }
 
-  if (inviteType) {
+  if (inviteType != null) {
     inviteType.forEach((el) => {
       currencies.push({
         value: el.type,
@@ -151,7 +194,13 @@ const InviteModel = (props: Props) => {
     })
   }
 
-  const stateOptions = []
+  interface StateOption {
+    key: string
+    text: string
+    value: string
+  }
+
+  const stateOptions: StateOption[] = []
   users.forEach((el) => {
     stateOptions.push({
       key: el.id,
@@ -162,7 +211,7 @@ const InviteModel = (props: Props) => {
 
   useEffect(() => {
     const fetchData = async () => {
-      await retrieveInvites()
+      await InviteTypeService.retrieveInvites()
     }
     fetchData()
   }, [])
@@ -175,7 +224,7 @@ const InviteModel = (props: Props) => {
     const value = e.target.value.trim()
   }
 
-  const handleCloseSnabar = (event?: React.SyntheticEvent, reason?: string) => {
+  const handleCloseSnabar = (event: React.SyntheticEvent, reason?: SnackbarCloseReason) => {
     if (reason === 'clickaway') {
       return
     }
@@ -192,19 +241,15 @@ const InviteModel = (props: Props) => {
         open={open}
         onClose={handleClose}
         closeAfterTransition
-        BackdropComponent={Backdrop}
-        BackdropProps={{
-          timeout: 500
-        }}
       >
-        <Fade in={props.open}>
+        <Fade in={props.open} style={{ backgroundColor: '#343b41' }}>
           <div
             className={classNames({
               [styles.paper]: true,
               [styles['modal-content']]: true
             })}
           >
-            <Typography variant="h5" align="center" className="mt-4 mb-4" component="h4">
+            <Typography variant="h5" align="center" className="mt-4 mb-4" component="h4" style={{ color: '#fff' }}>
               Send Invite
             </Typography>
             <Dropdown
@@ -217,6 +262,7 @@ const InviteModel = (props: Props) => {
               onSearchChange={handleInputChange}
               options={stateOptions}
             />
+
             <ValidatorForm onSubmit={createInvite}>
               <Grid container spacing={3}>
                 <Grid item xs={5}>
@@ -235,6 +281,7 @@ const InviteModel = (props: Props) => {
                 </Grid>
                 <Grid item xs={4}>
                   <TextField
+                    className={classes.root}
                     id="outlined-select-currency-native"
                     select
                     label="Target type"
@@ -248,8 +295,8 @@ const InviteModel = (props: Props) => {
                     required
                     variant="outlined"
                   >
-                    {currencies.map((option) => (
-                      <option key={option.value} value={option.value}>
+                    {currencies.map((option, index) => (
+                      <option key={option.value + index} value={option.value}>
                         {option.label}
                       </option>
                     ))}
@@ -270,8 +317,8 @@ const InviteModel = (props: Props) => {
                     required
                     variant="outlined"
                   >
-                    {provide.map((option) => (
-                      <option key={option.value} value={option.value}>
+                    {provide.map((option, element) => (
+                      <option key={option.value + element} value={option.value}>
                         {option.label}
                       </option>
                     ))}
@@ -280,6 +327,7 @@ const InviteModel = (props: Props) => {
               </Grid>
 
               <TextValidator
+                style={{ color: '#fff' }}
                 variant="outlined"
                 margin="normal"
                 fullWidth
@@ -295,7 +343,7 @@ const InviteModel = (props: Props) => {
               />
               <FormGroup row className={styles.locationModalButtons}>
                 {' '}
-                <Button type="submit" variant="contained" color="primary">
+                <Button type="submit" variant="contained" style={{ background: 'rgb(58, 65, 73)', color: '#fff' }}>
                   Send Invitation
                 </Button>
                 <Button type="submit" variant="contained" onClick={handleClose}>
@@ -317,7 +365,121 @@ const InviteModel = (props: Props) => {
         </Alert>
       </Snackbar>
     </div>
+
+    // <Drawer classes={{paper:classes.paper}} anchor="right" open={open} onClose={handleClose()}>
+    //   <Container maxWidth="sm" className={classes.marginTp}>
+    //     <DialogTitle id="form-dialog-title" className={classes.texAlign}>
+    //      Send Invite
+    //     </DialogTitle>
+    //     <Paper component="div" className={classes.createInput}>
+    //     <Dropdown
+    //         placeholder="Users"
+    //         fluid
+    //         multiple
+    //         search
+    //         selection
+    //         onChange={onSelectValue}
+    //         onSearchChange={handleInputChange}
+    //         options={stateOptions}
+    //       />
+    //     </Paper>
+    //     <Grid container spacing={3}>
+    //     <Grid item xs={5}>
+    //       <label>Enter valid Passcode or None</label>
+    //      <Paper component="div" className={classes.createInput}>
+    //      <InputBase
+    //       className={classes.input}
+    //       name="passcode"
+    //       placeholder="Enter valid Passcode or None"
+    //       style={{ color: '#fff' }}
+    //       autoComplete="off"
+    //       value={passcode}
+    //       onChange={(e) => setPasscode(e.target.value)}
+    //      />
+    //      </Paper>
+    //     </Grid>
+    //     <Grid item xs={4}>
+    //       <label>Target type</label>
+    //       <Paper component="div" className={classes.createInput}>
+    //       <FormControl fullWidth>
+    //       <Select
+    //         labelId="demo-controlled-open-select-label"
+    //         id="demo-controlled-open-select"
+    //         value={currency}
+    //         fullWidth
+    //         displayEmpty
+    //         // name="avatar"
+    //         onChange={handleChange}
+    //         className={classes.select}
+    //         MenuProps={{ classes: { paper: classes.selectPaper } }}
+    //       >
+    //        <MenuItem value="" disabled>
+    //        <em>friend</em>
+    //        </MenuItem>
+    //         {currencies.map((option) => (
+    //                 <MenuItem key={option.value} value={option.value}>
+    //                   {option.label}
+    //                 </MenuItem>
+    //               ))}
+    //       </Select>
+    //       </FormControl>
+    //       </Paper>
+    //     </Grid>
+    //     <Grid item xs={3}>
+    //     <label>Identity provider  type</label>
+    //       <Paper component="div" className={classes.createInput}>
+    //       <FormControl fullWidth>
+    //       <Select
+    //         labelId="demo-controlled-open-select-label"
+    //         id="demo-controlled-open-select"
+    //         value={providerType}
+    //         fullWidth
+    //         displayEmpty
+    //         // name="avatar"
+    //         onChange={handleChangeType}
+    //         className={classes.select}
+    //         MenuProps={{ classes: { paper: classes.selectPaper } }}
+    //       >
+    //        <MenuItem value="" disabled>
+    //        <em>E-mail</em>
+    //        </MenuItem>
+    //         {provide.map((option) => (
+    //                 <MenuItem key={option.value} value={option.value}>
+    //                   {option.label}
+    //                 </MenuItem>
+    //               ))}
+    //       </Select>
+    //       </FormControl>
+    //       </Paper>
+
+    //     </Grid>
+    //     </Grid>
+    //     <label>Please enter US phone number or E-mail</label>
+    //      <Paper component="div" className={classes.createInput}>
+    //      <InputBase
+    //       className={classes.input}
+    //       name="token"
+    //       placeholder="Please enter US phone number or E-mail"
+    //       style={{ color: '#fff' }}
+    //       autoComplete="off"
+    //       value={token}
+    //       onChange={(e) => setToken(e.target.value)}
+    //      />
+    //      </Paper>
+
+    //      <FormGroup row className={styles.locationModalButtons}>
+    //           {' '}
+    //           <Button type="submit" variant="contained" style={{ background: 'rgb(58, 65, 73)', color: '#fff' }}>
+    //             Send Invitation
+    //           </Button>
+    //           <Button type="submit" variant="contained" onClick={handleClose}>
+    //             Cancel
+    //           </Button>
+    //         </FormGroup>
+
+    //   </Container>
+    // </Drawer>
   )
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(InviteModel)
+export default InviteModel

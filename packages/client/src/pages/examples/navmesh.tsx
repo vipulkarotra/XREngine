@@ -1,18 +1,22 @@
-import { Timer } from '@xrengine/engine/src/common/functions/Timer'
 import { Engine } from '@xrengine/engine/src/ecs/classes/Engine'
+import { Entity } from '@xrengine/engine/src/ecs/classes/Entity'
+import { World } from '@xrengine/engine/src/ecs/classes/World'
 import {
   addComponent,
-  createEntity,
   createMappedComponent,
   getComponent
-} from '@xrengine/engine/src/ecs/functions/EntityFunctions'
-import { createPipeline, registerSystem } from '@xrengine/engine/src/ecs/functions/SystemFunctions'
+} from '@xrengine/engine/src/ecs/functions/ComponentFunctions'
+import { createEntity } from '@xrengine/engine/src/ecs/functions/EntityFunctions'
+import { initSystems } from '@xrengine/engine/src/ecs/functions/SystemFunctions'
+import { useWorld } from '@xrengine/engine/src/ecs/functions/SystemHooks'
 import { SystemUpdateType } from '@xrengine/engine/src/ecs/functions/SystemUpdateType'
+import { createEngine } from '@xrengine/engine/src/initializeEngine'
 import { OrbitControls } from '@xrengine/engine/src/input/functions/OrbitControls'
 import { createCellSpaceHelper } from '@xrengine/engine/src/navigation/CellSpacePartitioningHelper'
 import { CustomVehicle } from '@xrengine/engine/src/navigation/CustomVehicle'
 import { createConvexRegionHelper } from '@xrengine/engine/src/navigation/NavMeshHelper'
 import { PathPlanner } from '@xrengine/engine/src/navigation/PathPlanner'
+import { defineQuery } from 'bitecs'
 import React, { useEffect } from 'react'
 import {
   AmbientLight,
@@ -29,9 +33,6 @@ import {
   WebGLRenderer
 } from 'three'
 import { CellSpacePartitioning, EntityManager, FollowPathBehavior, NavMeshLoader, Time } from 'yuka'
-import { defineQuery, defineSystem, System, Types } from 'bitecs'
-import { AnimationClip, AnimationMixer } from 'three'
-import { ECSWorld, World } from '@xrengine/engine/src/ecs/classes/World'
 
 type NavigationComponentType = {
   pathPlanner: PathPlanner
@@ -44,13 +45,12 @@ type NavigationComponentType = {
   navigationMesh
 }
 
-const NavigationComponent = createMappedComponent<NavigationComponentType>()
+const NavigationComponent = createMappedComponent<NavigationComponentType>('NavigationComponent')
 
-const RenderSystem = async (): Promise<System> => {
-  return defineSystem((world: ECSWorld) => {
+const RenderSystem = async (world: World) => {
+  return () => {
     Engine.renderer.render(Engine.scene, Engine.camera)
-    return world
-  })
+  }
 }
 
 const pathMaterial = new LineBasicMaterial({ color: 0xff0000 })
@@ -131,7 +131,7 @@ async function startDemo(entity) {
   }
 }
 
-export const NavigationSystem = async (): Promise<System> => {
+export const NavigationSystem = async (world: World) => {
   const entity = createEntity()
   addComponent(entity, NavigationComponent, {
     pathPlanner: new PathPlanner(),
@@ -147,11 +147,11 @@ export const NavigationSystem = async (): Promise<System> => {
 
   const navigationQuery = defineQuery([NavigationComponent])
 
-  return defineSystem((world: ECSWorld) => {
+  return () => {
     const { delta } = world
 
     for (const entity of navigationQuery(world)) {
-      const navComponent = getComponent(entity, NavigationComponent)
+      const navComponent = getComponent(entity as Entity, NavigationComponent)
 
       navComponent.entityManager.update(delta)
 
@@ -199,8 +199,7 @@ export const NavigationSystem = async (): Promise<System> => {
 
       vehicleMesh.instanceMatrix.needsUpdate = true
     }
-    return world
-  })
+  }
 }
 
 // This is a functional React component
@@ -209,33 +208,18 @@ const Page = () => {
     ;(async function () {
       // Register our systems to do stuff
 
-      registerSystem(SystemUpdateType.Fixed, NavigationSystem)
-      registerSystem(SystemUpdateType.Free, RenderSystem)
-
-      const fixedPipeline = await createPipeline(SystemUpdateType.Fixed)
-      const freePipeline = await createPipeline(SystemUpdateType.Free)
-      const networkPipeline = await createPipeline(SystemUpdateType.Network)
-
-      const executePipeline = (world: World, pipeline) => {
-        return (delta, elapsedTime) => {
-          world.ecsWorld.delta = delta
-          world.ecsWorld.time = elapsedTime
-          pipeline(world.ecsWorld)
-          world.ecsWorld._removedComponents.clear()
-        }
-      }
-
-      const world = World.defaultWorld
-
-      Engine.engineTimer = Timer(
+      createEngine()
+      await initSystems(useWorld(), [
         {
-          networkUpdate: executePipeline(world, networkPipeline),
-          fixedUpdate: executePipeline(world, fixedPipeline),
-          update: executePipeline(world, freePipeline)
+          type: SystemUpdateType.FIXED,
+          systemModulePromise: Promise.resolve({ default: NavigationSystem })
         },
-        Engine.physicsFrameRate,
-        Engine.networkFramerate
-      )
+        {
+          type: SystemUpdateType.UPDATE,
+          systemModulePromise: Promise.resolve({ default: RenderSystem })
+        }
+      ])
+
       // Set up rendering and basic scene for demo
       const canvas = document.createElement('canvas')
       document.body.appendChild(canvas) // adds the canvas to the body element
@@ -243,7 +227,7 @@ const Page = () => {
       let w = window.innerWidth,
         h = window.innerHeight
 
-      let ctx = canvas.getContext('webgl2') //, { alpha: false }
+      let ctx = canvas.getContext('webgl2') as WebGLRenderingContext //, { alpha: false }
       Engine.renderer = new WebGLRenderer({ canvas: canvas, context: ctx, antialias: true })
 
       Engine.renderer.setClearColor(0x3a3a3a, 1)

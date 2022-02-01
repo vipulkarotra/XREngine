@@ -1,79 +1,150 @@
 import {
   AdditiveBlending,
-  BufferGeometry,
-  Float32BufferAttribute,
-  Line,
-  LineBasicMaterial,
+  BoxGeometry,
+  BufferAttribute,
   Mesh,
   MeshBasicMaterial,
-  MeshPhongMaterial,
   RingGeometry,
-  Vector3
+  SphereGeometry,
+  XRInputSource
 } from 'three'
 import { AssetLoader } from '../../assets/classes/AssetLoader'
-import { getLoader } from '../../assets/functions/LoadGLTF'
-import { XRInputSourceComponent } from '../../avatar/components/XRInputSourceComponent'
+import { SkeletonUtils } from '../../avatar/SkeletonUtils'
+import { Engine } from '../../ecs/classes/Engine'
 import { Entity } from '../../ecs/classes/Entity'
-import { getComponent } from '../../ecs/functions/EntityFunctions'
+import { getComponent } from '../../ecs/functions/ComponentFunctions'
+import { XRInputSourceComponent } from '../../xr/components/XRInputSourceComponent'
+import { XRHandMeshModel } from '../classes/XRHandMeshModel'
+import { initializeXRControllerAnimations } from './controllerAnimation'
+import { mapXRControllers } from './WebXRFunctions'
 
-export const addControllerModels = (entity: Entity) => {
+const createUICursor = () => {
+  const geometry = new SphereGeometry(0.01, 16, 16)
+  const material = new MeshBasicMaterial({ color: 0xffffff })
+  return new Mesh(geometry, material)
+}
+
+const setupController = (inputSource, controller) => {
+  if (inputSource) {
+    const targetRay = createController(inputSource)
+    if (targetRay) {
+      controller.add(targetRay)
+      controller.targetRay = targetRay
+    }
+  }
+
+  if (!controller.cursor) {
+    controller.cursor = createUICursor()
+    controller.add(controller.cursor)
+    controller.cursor.visible = false
+  }
+}
+
+export const initializeXRInputs = (entity: Entity) => {
   const xrInputSourceComponent = getComponent(entity, XRInputSourceComponent)
 
-  // Add our controller models & pointer lines
-  ;[xrInputSourceComponent.controllerLeft, xrInputSourceComponent.controllerRight].forEach((controller: any) => {
-    /*
-        controller.addEventListener('select', (ev) => {})
-        controller.addEventListener('selectstart', (ev) => {})
-        controller.addEventListener('selectend', (ev) => {})
-        controller.addEventListener('squeeze', (ev) => {})
-        controller.addEventListener('squeezestart', (ev) => {})
-        controller.addEventListener('squeezeend', (ev) => {})
-    */
-    controller.addEventListener('connected', (ev) => {
-      if (controller.targetRay) {
-        controller.targetRay.visible = true
-      } else {
-        const targetRay = createController(ev.data)
-        controller.add(targetRay)
-        controller.targetRay = targetRay
+  const session = Engine.xrManager.getSession()
+  const controllers = [xrInputSourceComponent.controllerLeft, xrInputSourceComponent.controllerRight]
+  const controllersGrip = [xrInputSourceComponent.controllerGripLeft, xrInputSourceComponent.controllerGripRight]
+
+  controllers.forEach((controller: any, i) => {
+    if (controller.userData.initialized) {
+      return
+    }
+    controller.userData.initialized = true
+
+    controller.parent.addEventListener('connected', (ev) => {
+      mapXRControllers(xrInputSourceComponent)
+
+      const xrInputSource = ev.data as XRInputSource
+
+      if (xrInputSource.targetRayMode !== 'tracked-pointer' && xrInputSource.targetRayMode !== 'gaze') {
+        return
+      }
+
+      if (!controller.targetRay) {
+        setupController(ev.data, controller)
       }
     })
 
-    controller.addEventListener('disconnected', (ev) => {
-      controller.targetRay.visible = false
-    })
+    const inputSource = session.inputSources[i]
+    setupController(inputSource, controller)
   })
 
-  const { scene: model } = AssetLoader.getFromCache('/models/webxr/controllers/valve_controller_knu_1_0_right.glb')
+  controllersGrip.forEach((controller: any) => {
+    if (controller.userData.initialized) {
+      return
+    }
 
-  const controller3DModel = model.children[2] as any
+    controller.userData.initialized = true
 
-  const controllerMeshRight = controller3DModel.clone()
-  const controllerMeshLeft = controller3DModel.clone()
+    const handedness = controller === xrInputSourceComponent.controllerGripLeft ? 'left' : 'right'
+    const winding = handedness == 'left' ? 1 : -1
+    initializeHandModel(controller, handedness, true)
+    initializeXRControllerAnimations(controller)
+    controller.userData.mesh.rotation.x = Math.PI * 0.25
+    controller.userData.mesh.rotation.y = Math.PI * 0.5 * winding
+    controller.userData.mesh.rotation.z = Math.PI * 0.02 * -winding
+  })
+}
 
-  controllerMeshLeft.scale.multiply(new Vector3(-1, 1, 1))
+export const initializeHandModel = (controller: any, handedness: string, isGrip: boolean = false) => {
+  const fileName = isGrip ? `${handedness}_controller.glb` : `${handedness}.glb`
+  const gltf = AssetLoader.getFromCache(`/default_assets/controllers/hands/${fileName}`)
+  let handMesh = gltf?.scene?.children[0]
 
-  controllerMeshRight.material = new MeshPhongMaterial()
-  controllerMeshLeft.material = new MeshPhongMaterial()
+  if (!handMesh) {
+    console.error(`Could not load ${fileName} mesh`)
+    return
+  }
 
-  controllerMeshRight.position.z = -0.12
-  controllerMeshLeft.position.z = -0.12
+  handMesh = SkeletonUtils.clone(handMesh)
 
-  xrInputSourceComponent.controllerGripRight.add(controllerMeshRight)
-  xrInputSourceComponent.controllerGripLeft.add(controllerMeshLeft)
+  if (controller.userData.mesh) {
+    controller.remove(controller.userData.mesh)
+  }
+
+  controller.userData.mesh = isGrip ? handMesh : new XRHandMeshModel(controller, handMesh, handedness)
+  controller.add(controller.userData.mesh)
+  controller.userData.handedness = handedness
+
+  if (gltf?.animations?.length) {
+    controller.userData.animations = gltf.animations
+  }
+}
+
+export const cleanXRInputs = (entity) => {
+  const xrInputSourceComponent = getComponent(entity, XRInputSourceComponent)
+  const controllersGrip = [xrInputSourceComponent.controllerGripLeft, xrInputSourceComponent.controllerGripRight]
+
+  controllersGrip.forEach((controller) => {
+    if (controller.userData.mesh) {
+      controller.remove(controller.userData.mesh)
+      controller.userData.mesh = null
+    }
+  })
 }
 
 // pointer taken from https://github.com/mrdoob/three.js/blob/master/examples/webxr_vr_ballshooter.html
-const createController = (data) => {
+const createController = (inputSource) => {
   let geometry, material
-  switch (data.targetRayMode) {
+  switch (inputSource.targetRayMode) {
     case 'tracked-pointer':
-      geometry = new BufferGeometry()
-      geometry.setAttribute('position', new Float32BufferAttribute([0, 0, 0, 0, 0, -1], 3))
-      geometry.setAttribute('color', new Float32BufferAttribute([0.5, 0.5, 0.5, 0, 0, 0], 3))
-      geometry.setAttribute('alpha', new Float32BufferAttribute([1, 0], 1))
-      material = new LineBasicMaterial({ vertexColors: true, blending: AdditiveBlending })
-      return new Line(geometry, material)
+      geometry = new BoxGeometry(0.005, 0.005, 0.25)
+      const positions = geometry.attributes.position
+      const count = positions.count
+      geometry.setAttribute('color', new BufferAttribute(new Float32Array(count * 3), 3))
+      const colors = geometry.attributes.color
+
+      for (let i = 0; i < count; i++) {
+        if (positions.getZ(i) < 0) colors.setXYZ(i, 0, 0, 0)
+        else colors.setXYZ(i, 0.5, 0.5, 0.5)
+      }
+
+      material = new MeshBasicMaterial({ color: 0xffffff, vertexColors: true, blending: AdditiveBlending })
+      const mesh = new Mesh(geometry, material)
+      mesh.position.z = -0.125
+      return mesh
 
     case 'gaze':
       geometry = new RingGeometry(0.02, 0.04, 32).translate(0, 0, -1)

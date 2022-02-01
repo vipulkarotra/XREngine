@@ -1,11 +1,12 @@
 # not slim because we need github depedencies
-FROM node:16-buster
+FROM node:16-buster-slim
 
-RUN echo "deb [arch=amd64] http://nginx.org/packages/mainline/ubuntu/ eoan nginx\ndeb-src http://nginx.org/packages/mainline/ubuntu/ eoan nginx" >> /etc/apt/sources.list.d/nginx.list
-RUN wget http://nginx.org/keys/nginx_signing.key
-RUN apt-key add nginx_signing.key
-# ffmpeg 4+ is required
-RUN apt update && apt install -y ffmpeg=*:4.** nginx
+RUN apt-get update
+RUN apt-get install build-essential -y
+RUN apt install -y meson
+RUN apt install -y python3-testresources
+RUN apt-get install -y python3-venv
+RUN apt-get install python3-pip -y
 # Create app directory
 WORKDIR /app
 
@@ -13,16 +14,18 @@ RUN npm install -g lerna cross-env rimraf --loglevel notice
 
 # to make use of caching, copy only package files and install dependencies
 COPY package.json .
+COPY packages/analytics/package.json ./packages/analytics/
 COPY packages/client/package.json ./packages/client/
 COPY packages/client-core/package.json ./packages/client-core/
 COPY packages/common/package.json ./packages/common/
 COPY packages/editor/package.json ./packages/editor/
 COPY packages/engine/package.json ./packages/engine/
+COPY packages/matchmaking/package.json ./packages/matchmaking/
 COPY packages/gameserver/package.json ./packages/gameserver/
+COPY packages/matchmaking/package.json ./packages/matchmaking/
 COPY packages/server/package.json ./packages/server/
 COPY packages/server-core/package.json ./packages/server-core/
-COPY packages/social/package.json ./packages/social/
-COPY packages/bot/package.json ./packages/bot/
+COPY packages/projects/package.json ./packages/projects/
 
 #RUN  npm ci --verbose  # we should make lockfile or shrinkwrap then use npm ci for predicatble builds
 RUN npm install --production=false --loglevel notice --legacy-peer-deps
@@ -31,10 +34,19 @@ COPY . .
 
 # copy then compile the code
 
-RUN npm run build-docker
+ARG MYSQL_HOST
+ARG MYSQL_PORT
+ARG MYSQL_USER
+ARG MYSQL_PASSWORD
+ARG MYSQL_DATABASE
+ENV MYSQL_HOST=$MYSQL_HOST
+ENV MYSQL_PORT=$MYSQL_PORT
+ENV MYSQL_USER=$MYSQL_USER
+ENV MYSQL_PASSWORD=$MYSQL_PASSWORD
+ENV MYSQL_DATABASE=$MYSQL_DATABASE
 
-ENV NODE_ENV=production
-ENV PORT=3030
+RUN npm run build-client
 
-EXPOSE 3030
+ENV APP_ENV=production
+
 CMD ["scripts/start-server.sh"]

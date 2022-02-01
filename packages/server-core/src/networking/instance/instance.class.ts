@@ -1,7 +1,7 @@
 import { Service, SequelizeServiceOptions } from 'feathers-sequelize'
 import { Application } from '../../../declarations'
 import { Params } from '@feathersjs/feathers'
-import { extractLoggedInUserFromParams } from '../../user/auth-management/auth-management.utils'
+import Sequelize, { Op } from 'sequelize'
 
 /**
  * A class for Intance service
@@ -16,13 +16,14 @@ export class Instance extends Service {
     this.app = app
   }
   /**
-   * A method which find instance of user
+   * A method which searches for instances
    *
    * @param params of query with an acton or user role
    * @returns user object
    */
   async find(params: Params): Promise<any> {
     const action = params.query?.action
+    const search = params.query?.search
     const skip = params.query?.$skip ? params.query.$skip : 0
     const limit = params.query?.$limit ? params.query.$limit : 10
 
@@ -32,16 +33,26 @@ export class Instance extends Service {
       // const user = await super.get(loggedInUser.userId);
       // console.log(user);
       // if (user.userRole !== 'admin') throw new Forbidden ('Must be system admin to execute this action');
+      let ip = {}
+      let name = {}
+      if (!isNaN(search)) {
+        ip = search ? { ipAddress: { [Op.like]: `%${search}%` } } : {}
+      } else {
+        name = search ? { name: { [Op.like]: `%${search}%` } } : {}
+      }
 
       const foundLocation = await (this.app.service('instance') as any).Model.findAndCountAll({
         offset: skip,
         limit: limit,
         include: {
           model: (this.app.service('location') as any).Model,
-          required: false
+          required: true,
+          where: { ...name }
         },
-        nest: false
+        nest: false,
+        where: { ended: false, ...ip }
       })
+
       return {
         skip: skip,
         limit: limit,

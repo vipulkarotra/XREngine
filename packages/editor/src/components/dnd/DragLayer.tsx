@@ -1,7 +1,7 @@
 import React from 'react'
 import { useDragLayer } from 'react-dnd'
 import styled from 'styled-components'
-import { ItemTypes } from './index'
+import { ItemTypes } from '../../constants/AssetTypes'
 import { useTranslation } from 'react-i18next'
 
 /**
@@ -61,7 +61,7 @@ export default function DragLayer() {
     return null
   }
 
-  // Declairing variable preview
+  // Declaring variable preview
   let preview
 
   //check if itemType of Node item type

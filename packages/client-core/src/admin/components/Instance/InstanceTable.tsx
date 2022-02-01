@@ -1,39 +1,16 @@
-import React, { useEffect } from 'react'
-import Table from '@material-ui/core/Table'
-import TableBody from '@material-ui/core/TableBody'
-import TableCell from '@material-ui/core/TableCell'
-import TableContainer from '@material-ui/core/TableContainer'
-import TableHead from '@material-ui/core/TableHead'
-import TablePagination from '@material-ui/core/TablePagination'
-import TableRow from '@material-ui/core/TableRow'
-import { selectAuthState } from '../../../user/reducers/auth/selector'
-import { selectAdminState } from '../../reducers/admin/selector'
-import { fetchAdminInstances, removeInstance } from '../../reducers/admin/instance/service'
-import { bindActionCreators, Dispatch } from 'redux'
-import { connect } from 'react-redux'
-import { columns, Data } from './variables'
-import { selectAdminInstanceState } from '../../reducers/admin/instance/selector'
-import { useInstanceStyle, useInstanceStyles } from './styles'
+import React, { useEffect, useRef } from 'react'
+import { useDispatch } from '../../../store'
+import { useAuthState } from '../../../user/services/AuthService'
+import ConfirmModel from '../../common/ConfirmModel'
+import TableComponent from '../../common/Table'
+import { instanceColumns, InstanceData } from '../../common/variables/instance'
+import { InstanceService, INSTNCE_PAGE_LIMIT, useInstanceState } from '../../services/InstanceService'
+import { useStyles } from '../../styles/ui'
 
 interface Props {
-  adminState?: any
-  authState?: any
   fetchAdminState?: any
-  fetchAdminInstances?: any
-  adminInstanceState?: any
+  search: any
 }
-
-const mapStateToProps = (state: any): any => {
-  return {
-    authState: selectAuthState(state),
-    adminState: selectAdminState(state),
-    adminInstanceState: selectAdminInstanceState(state)
-  }
-}
-
-const mapDispatchToProps = (dispatch: Dispatch): any => ({
-  fetchAdminInstances: bindActionCreators(fetchAdminInstances, dispatch)
-})
 
 /**
  * JSX used to display table of instance
@@ -43,40 +20,64 @@ const mapDispatchToProps = (dispatch: Dispatch): any => ({
  * @author KIMENYI Kevin
  */
 const InstanceTable = (props: Props) => {
-  const { fetchAdminInstances, authState, adminInstanceState } = props
-  const classes = useInstanceStyle()
-  const classex = useInstanceStyles()
+  const { search } = props
+  const dispatch = useDispatch()
+  const classes = useStyles()
   const [page, setPage] = React.useState(0)
-  const [rowsPerPage, setRowsPerPage] = React.useState(12)
+  const [rowsPerPage, setRowsPerPage] = React.useState(INSTNCE_PAGE_LIMIT)
   const [refetch, setRefetch] = React.useState(false)
+  const [popConfirmOpen, setPopConfirmOpen] = React.useState(false)
+  const [instanceId, setInstanceId] = React.useState('')
+  const [instanceName, setInstanceName] = React.useState('')
 
-  const user = authState.get('user')
-  const adminInstances = adminInstanceState.get('instances')
+  const user = useAuthState().user
+  const adminInstanceState = useInstanceState()
+  const adminInstances = adminInstanceState
+
   const handlePageChange = (event: unknown, newPage: number) => {
+    const incDec = page < newPage ? 'increment' : 'decrement'
+    InstanceService.fetchAdminInstances(incDec)
     setPage(newPage)
   }
+
+  const handleCloseModel = () => {
+    setPopConfirmOpen(false)
+  }
+
+  const submitRemoveInstance = async () => {
+    await InstanceService.removeInstance(instanceId)
+    setPopConfirmOpen(false)
+  }
+
   const handleRowsPerPageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setRowsPerPage(+event.target.value)
     setPage(0)
   }
+  const isMounted = useRef(false)
 
   const fetchTick = () => {
     setTimeout(() => {
+      if (!isMounted.current) return
       setRefetch(true)
       fetchTick()
     }, 5000)
   }
 
   useEffect(() => {
+    isMounted.current = true
     fetchTick()
+    return () => {
+      isMounted.current = false
+    }
   }, [])
 
   React.useEffect(() => {
-    console.log('Checking for refetch')
-    console.log('refetch', refetch)
-    if ((user.id && adminInstances.get('updateNeeded')) || refetch === true) fetchAdminInstances()
+    if (!isMounted.current) return
+    if ((user.id.value && adminInstances.updateNeeded.value) || refetch === true) {
+      InstanceService.fetchAdminInstances('increment', search)
+    }
     setRefetch(false)
-  }, [user, adminInstanceState, refetch])
+  }, [user, adminInstanceState.updateNeeded.value, refetch])
 
   const createData = (
     id: string,
@@ -84,77 +85,53 @@ const InstanceTable = (props: Props) => {
     currentUsers: Number,
     locationId: any,
     channelId: string
-  ): Data => {
+  ): InstanceData => {
     return {
       id,
       ipAddress,
       currentUsers,
-      locationId: locationId.name || '',
+      locationId: locationId?.name || '',
       channelId,
       action: (
-        <>
-          <a href="#h" className={classes.actionStyle}>
-            {' '}
-            <span className={classes.spanDange}>Delete</span>{' '}
-          </a>
-        </>
+        <a
+          href="#h"
+          className={classes.actionStyle}
+          onClick={() => {
+            setPopConfirmOpen(true)
+            setInstanceId(id)
+            setInstanceName(ipAddress)
+          }}
+        >
+          <span className={classes.spanDange}>Delete</span>
+        </a>
       )
     }
   }
 
-  console.log('adminInstances', adminInstances.get('instances'))
-  const rows = adminInstances
-    .get('instances')
-    .map((el: any) => createData(el.id, el.ipAddress, el.currentUsers, el.location, el.channelId || ''))
+  const rows = adminInstances.instances.value.map((el: any) =>
+    createData(el.id, el.ipAddress, el.currentUsers, el.location, el.channelId || '')
+  )
 
   return (
-    <div className={classes.root}>
-      <TableContainer className={classes.container}>
-        <Table stickyHeader aria-label="sticky table">
-          <TableHead>
-            <TableRow>
-              {columns.map((column) => (
-                <TableCell
-                  key={column.id}
-                  align={column.align}
-                  style={{ minWidth: column.minWidth }}
-                  className={classex.tableCellHeader}
-                >
-                  {column.label}
-                </TableCell>
-              ))}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {rows.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((row) => {
-              return (
-                <TableRow hover role="checkbox" tabIndex={-1} key={row.id}>
-                  {columns.map((column) => {
-                    const value = row[column.id]
-                    return (
-                      <TableCell key={column.id} align={column.align} className={classex.tableCellBody}>
-                        {value}
-                      </TableCell>
-                    )
-                  })}
-                </TableRow>
-              )
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
-      <TablePagination
-        rowsPerPageOptions={[12]}
-        component="div"
-        count={adminInstances.get('total')}
-        rowsPerPage={rowsPerPage}
+    <React.Fragment>
+      <TableComponent
+        rows={rows}
+        column={instanceColumns}
         page={page}
-        onPageChange={handlePageChange}
-        onRowsPerPageChange={handleRowsPerPageChange}
-        className={classex.tableFooter}
+        rowsPerPage={rowsPerPage}
+        count={adminInstances.total.value}
+        handlePageChange={handlePageChange}
+        handleRowsPerPageChange={handleRowsPerPageChange}
       />
-    </div>
+      <ConfirmModel
+        popConfirmOpen={popConfirmOpen}
+        handleCloseModel={handleCloseModel}
+        submit={submitRemoveInstance}
+        name={instanceName}
+        label={'instance'}
+      />
+    </React.Fragment>
   )
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(InstanceTable)
+export default InstanceTable

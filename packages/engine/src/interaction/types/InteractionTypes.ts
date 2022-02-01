@@ -6,16 +6,3 @@ export type InteractionCheckHandler = (
   focusedPart?: number,
   args?: any
 ) => boolean
-
-export type InteractionData = {
-  interactable?: boolean
-  interactionType?: string
-  interactionText?: string
-  interactionDistance?: number
-  payloadName?: string
-  payloadUrl?: string
-  payloadBuyUrl?: string
-  payloadLearnMoreUrl?: string
-  payloadHtmlContent?: string
-  action?: any
-}

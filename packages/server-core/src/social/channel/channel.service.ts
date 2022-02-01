@@ -1,4 +1,3 @@
-import { ServiceAddons } from '@feathersjs/feathers'
 import { Application } from '../../../declarations'
 import { Channel } from './channel.class'
 import createModel from './channel.model'
@@ -9,11 +8,11 @@ import channelDocs from './channel.docs'
 // Add this service to the service type index
 declare module '../../../declarations' {
   interface ServiceTypes {
-    channel: Channel & ServiceAddons<any>
+    channel: Channel
   }
 }
 
-export default (app: Application): any => {
+export default (app: Application) => {
   const options = {
     Model: createModel(app),
     paginate: app.get('paginate')
@@ -26,11 +25,11 @@ export default (app: Application): any => {
    */
   const event = new Channel(options, app)
   event.docs = channelDocs
-  app.use('/channel', event)
+  app.use('channel', event)
 
   const service = app.service('channel')
 
-  service.hooks(hooks as any)
+  service.hooks(hooks)
 
   /**
    * A method which is used to create channel
@@ -66,7 +65,7 @@ export default (app: Application): any => {
         // if (user2AvatarResult.total > 0) {
         //   data.user2.dataValues.avatarUrl = user2AvatarResult.data[0].url;
         // }
-        targetIds = [data.userId1, data.userId2]
+        targetIds = []
       } else if (data.channelType === 'group') {
         if (data.group == null) {
           data.group = await (app.service('group') as any).Model.findOne({
@@ -100,9 +99,9 @@ export default (app: Application): any => {
         //   return await Promise.resolve();
         // }));
 
-        if (data.group.dataValues) {
+        if (data.group?.dataValues) {
           data.group.dataValues.groupUsers = groupUsers
-        } else {
+        } else if (data.group) {
           data.group.groupUsers = groupUsers
         }
         targetIds = groupUsers.map((groupUser) => groupUser.userId)
@@ -138,9 +137,9 @@ export default (app: Application): any => {
         //
         //   return await Promise.resolve();
         // }));
-        if (data.party.dataValues) {
+        if (data.party?.dataValues) {
           data.party.dataValues.partyUsers = partyUsers
-        } else {
+        } else if (data.party) {
           data.party.partyUsers = partyUsers
         }
         targetIds = partyUsers.map((partyUser) => partyUser.userId)
@@ -148,7 +147,8 @@ export default (app: Application): any => {
         if (data.instance == null) {
           data.instance = await (app.service('instance') as any).Model.findOne({
             where: {
-              id: data.instanceId
+              id: data.instanceId,
+              ended: false
             }
           })
         }
@@ -171,9 +171,9 @@ export default (app: Application): any => {
         //
         //   return await Promise.resolve();
         // }));
-        if (data.instance.dataValues) {
+        if (data.instance?.dataValues) {
           data.instance.dataValues.instanceUsers = instanceUsers
-        } else {
+        } else if (data.instance) {
           data.instance.instanceUsers = instanceUsers
         }
         targetIds = instanceUsers.map((instanceUser) => instanceUser.id)
@@ -260,9 +260,9 @@ export default (app: Application): any => {
         //   return await Promise.resolve();
         // }));
 
-        if (data.group.dataValues) {
+        if (data.group?.dataValues) {
           data.group.dataValues.groupUsers = groupUsers
-        } else {
+        } else if (data.group) {
           data.group.groupUsers = groupUsers
         }
         targetIds = groupUsers.map((groupUser) => groupUser.userId)
@@ -298,9 +298,9 @@ export default (app: Application): any => {
         //
         //   return await Promise.resolve();
         // }));
-        if (data.party.dataValues) {
+        if (data.party?.dataValues) {
           data.party.dataValues.partyUsers = partyUsers
-        } else {
+        } else if (data.party) {
           data.party.partyUsers = partyUsers
         }
         targetIds = partyUsers.map((partyUser) => partyUser.userId)
@@ -308,7 +308,8 @@ export default (app: Application): any => {
         if (data.instance == null) {
           data.instance = await (app.service('instance') as any).Model.findOne({
             where: {
-              id: data.instanceId
+              id: data.instanceId,
+              ended: false
             }
           })
         }
@@ -331,9 +332,9 @@ export default (app: Application): any => {
         //
         //   return await Promise.resolve();
         // }));
-        if (data.instance.dataValues) {
+        if (data.instance?.dataValues) {
           data.instance.dataValues.instanceUsers = instanceUsers
-        } else {
+        } else if (data.instance) {
           data.instance.instanceUsers = instanceUsers
         }
         targetIds = instanceUsers.map((instanceUser) => instanceUser.id)

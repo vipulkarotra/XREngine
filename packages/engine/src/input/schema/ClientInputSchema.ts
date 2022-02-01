@@ -5,13 +5,12 @@ import { GamepadAxis } from '../enums/InputEnums'
 import { Engine } from '../../ecs/classes/Engine'
 import { InputType } from '../enums/InputType'
 import { MouseInput, GamepadButtons, TouchInputs } from '../enums/InputEnums'
-import { ClientInputSystem } from '../systems/ClientInputSystem'
-import { EngineEvents } from '../../ecs/classes/EngineEvents'
 import { EngineRenderer } from '../../renderer/WebGLRendererSystem'
-import { NumericalType } from '../../common/types/NumericalTypes'
+import normalizeWheel from '../functions/normalizeWheel'
+import { dispatchLocal } from '../../networking/functions/dispatchFrom'
+import { EngineActions } from '../../ecs/classes/EngineService'
 
-const touchSensitive = 2
-let prevTouchPosition: [number, number] = [0, 0]
+export let prevTouchPosition: [number, number] = [0, 0]
 let lastTap = Date.now()
 const tapLength = 200 // 100ms between doubletaps
 
@@ -31,7 +30,7 @@ export const usingThumbstick = () => {
 }
 
 export const handleTouchMove = (event: TouchEvent): void => {
-  if (!Engine.mouseInputEnabled) {
+  if (!Engine.mouseInputEnabled || event.touches.length <= 0) {
     return
   }
 
@@ -50,7 +49,7 @@ export const handleTouchMove = (event: TouchEvent): void => {
     Engine.inputState.set(mappedPositionInput, {
       type: InputType.TWODIM,
       value: touchPosition,
-      lifecycleState: hasData ? LifecycleValue.CHANGED : LifecycleValue.STARTED
+      lifecycleState: hasData ? LifecycleValue.Changed : LifecycleValue.Started
     })
 
     const movementStart = event.type === 'touchstart'
@@ -58,8 +57,8 @@ export const handleTouchMove = (event: TouchEvent): void => {
 
     const touchMovement: [number, number] = [0, 0]
     if (!movementStart && prevTouchPosition) {
-      touchMovement[0] = (touchPosition[0] - prevTouchPosition[0]) * touchSensitive
-      touchMovement[1] = (touchPosition[1] - prevTouchPosition[1]) * touchSensitive
+      touchMovement[0] = touchPosition[0] - prevTouchPosition[0]
+      touchMovement[1] = touchPosition[1] - prevTouchPosition[1]
     }
 
     prevTouchPosition = touchPosition
@@ -67,7 +66,7 @@ export const handleTouchMove = (event: TouchEvent): void => {
     Engine.inputState.set(mappedMovementInput, {
       type: InputType.TWODIM,
       value: touchMovement,
-      lifecycleState: Engine.inputState.has(mappedMovementInput) ? LifecycleValue.CHANGED : LifecycleValue.STARTED
+      lifecycleState: Engine.inputState.has(mappedMovementInput) ? LifecycleValue.Changed : LifecycleValue.Started
     })
   } else if (event.touches.length >= 2) {
     const normalizedPosition2 = normalizeMouseCoordinates(
@@ -81,13 +80,13 @@ export const handleTouchMove = (event: TouchEvent): void => {
     Engine.inputState.set(TouchInputs.Touch1Position, {
       type: InputType.TWODIM,
       value: touchPosition,
-      lifecycleState: LifecycleValue.CHANGED
+      lifecycleState: LifecycleValue.Changed
     })
 
     Engine.inputState.set(TouchInputs.Touch2Position, {
       type: InputType.TWODIM,
       value: touchPosition2,
-      lifecycleState: LifecycleValue.CHANGED
+      lifecycleState: LifecycleValue.Changed
     })
 
     const scaleMappedInputKey = TouchInputs.Scale
@@ -96,11 +95,11 @@ export const handleTouchMove = (event: TouchEvent): void => {
 
     if (usingStick) {
       if (Engine.inputState.has(scaleMappedInputKey)) {
-        const oldValue = Engine.inputState.get(scaleMappedInputKey).value as number
+        const [oldValue] = Engine.inputState.get(scaleMappedInputKey)?.value as number[]
         Engine.inputState.set(scaleMappedInputKey, {
           type: InputType.ONEDIM,
-          value: oldValue,
-          lifecycleState: LifecycleValue.ENDED
+          value: [oldValue],
+          lifecycleState: LifecycleValue.Ended
         })
       }
       return
@@ -118,10 +117,10 @@ export const handleTouchMove = (event: TouchEvent): void => {
       return
     }
     const currentTouchcontrollerPositionLeft = new Vector2().fromArray(
-      Engine.inputState.get(TouchInputs.Touch1Position).value as number[]
+      Engine.inputState.get(TouchInputs.Touch1Position)?.value as number[]
     )
     const currentTouchPosition2 = new Vector2().fromArray(
-      Engine.inputState.get(TouchInputs.Touch2Position).value as number[]
+      Engine.inputState.get(TouchInputs.Touch2Position)?.value as number[]
     )
 
     const lastTouchcontrollerPositionLeft = new Vector2().fromArray(lastTouchcontrollerPositionLeftArray as number[])
@@ -135,15 +134,15 @@ export const handleTouchMove = (event: TouchEvent): void => {
     if (!Engine.inputState.has(scaleMappedInputKey)) {
       Engine.inputState.set(scaleMappedInputKey, {
         type: InputType.ONEDIM,
-        value: signVal,
-        lifecycleState: LifecycleValue.STARTED
+        value: [signVal],
+        lifecycleState: LifecycleValue.Started
       })
     } else {
-      const oldValue = Engine.inputState.get(scaleMappedInputKey).value as number
+      const [oldValue] = Engine.inputState.get(scaleMappedInputKey)?.value as number[]
       Engine.inputState.set(scaleMappedInputKey, {
         type: InputType.ONEDIM,
-        value: oldValue + signVal,
-        lifecycleState: LifecycleValue.CHANGED
+        value: [oldValue + signVal],
+        lifecycleState: LifecycleValue.Changed
       })
     }
   }
@@ -167,26 +166,26 @@ export const handleTouch = (event: TouchEvent): void => {
         if (timeNow - lastTap < tapLength) {
           Engine.inputState.set(doubleTapInput, {
             type: InputType.BUTTON,
-            value: BinaryValue.ON,
-            lifecycleState: Engine.inputState.has(doubleTapInput) ? LifecycleValue.CONTINUED : LifecycleValue.STARTED
+            value: [BinaryValue.ON],
+            lifecycleState: Engine.inputState.has(doubleTapInput) ? LifecycleValue.Continued : LifecycleValue.Started
           })
         } else if (Engine.inputState.has(doubleTapInput)) {
           Engine.inputState.set(doubleTapInput, {
             type: InputType.BUTTON,
-            value: BinaryValue.OFF,
-            lifecycleState: LifecycleValue.ENDED
+            value: [BinaryValue.OFF],
+            lifecycleState: LifecycleValue.Ended
           })
         }
         lastTap = timeNow
       }
 
       // If the key is in the map but it's in the same state as now, let's skip it (debounce)
-      if (Engine.inputState.has(mappedInputKey) && Engine.inputState.get(mappedInputKey).value === BinaryValue.ON) {
-        if (Engine.inputState.get(mappedInputKey).lifecycleState !== LifecycleValue.CONTINUED) {
+      if (Engine.inputState.has(mappedInputKey) && Engine.inputState.get(mappedInputKey)?.value[0] === BinaryValue.ON) {
+        if (Engine.inputState.get(mappedInputKey)?.lifecycleState !== LifecycleValue.Continued) {
           Engine.inputState.set(mappedInputKey, {
             type: InputType.BUTTON,
-            value: BinaryValue.ON,
-            lifecycleState: LifecycleValue.CONTINUED
+            value: [BinaryValue.ON],
+            lifecycleState: LifecycleValue.Continued
           })
         }
         return
@@ -195,14 +194,14 @@ export const handleTouch = (event: TouchEvent): void => {
       // Set type to BUTTON (up/down discrete state) and value to up or down, depending on what the value is set to
       Engine.inputState.set(mappedInputKey, {
         type: InputType.BUTTON,
-        value: BinaryValue.ON,
-        lifecycleState: LifecycleValue.STARTED
+        value: [BinaryValue.ON],
+        lifecycleState: LifecycleValue.Started
       })
     } else {
       Engine.inputState.set(mappedInputKey, {
         type: InputType.BUTTON,
-        value: BinaryValue.OFF,
-        lifecycleState: LifecycleValue.ENDED
+        value: [BinaryValue.OFF],
+        lifecycleState: LifecycleValue.Ended
       })
     }
     return
@@ -210,16 +209,16 @@ export const handleTouch = (event: TouchEvent): void => {
   if (Engine.inputState.has(TouchInputs.Touch)) {
     Engine.inputState.set(TouchInputs.Touch, {
       type: InputType.BUTTON,
-      value: BinaryValue.OFF,
-      lifecycleState: LifecycleValue.ENDED
+      value: [BinaryValue.OFF],
+      lifecycleState: LifecycleValue.Ended
     })
   }
 
   if (Engine.inputState.has(TouchInputs.DoubleTouch)) {
     Engine.inputState.set(TouchInputs.DoubleTouch, {
       type: InputType.BUTTON,
-      value: BinaryValue.OFF,
-      lifecycleState: LifecycleValue.ENDED
+      value: [BinaryValue.OFF],
+      lifecycleState: LifecycleValue.Ended
     })
   }
 
@@ -227,7 +226,7 @@ export const handleTouch = (event: TouchEvent): void => {
     Engine.inputState.set(TouchInputs.Touch1Movement, {
       type: InputType.TWODIM,
       value: [0, 0],
-      lifecycleState: LifecycleValue.ENDED
+      lifecycleState: LifecycleValue.Ended
     })
   }
 }
@@ -252,11 +251,11 @@ export const handleTouchDirectionalPad = (event: CustomEvent): void => {
     Engine.inputState.set(stick, {
       type: InputType.TWODIM,
       value: stickPosition,
-      lifecycleState: LifecycleValue.STARTED
+      lifecycleState: LifecycleValue.Started
     })
   } else {
     // If position set, check it's value
-    const oldStickPosition = Engine.inputState.get(stick)
+    const oldStickPosition = Engine.inputState.get(stick)?.value
     // If it's not the same, set it and update the lifecycle value to changed
     if (JSON.stringify(oldStickPosition) !== JSON.stringify(stickPosition)) {
       // console.log('---changed');
@@ -264,7 +263,7 @@ export const handleTouchDirectionalPad = (event: CustomEvent): void => {
       Engine.inputState.set(stick, {
         type: InputType.TWODIM,
         value: stickPosition,
-        lifecycleState: LifecycleValue.CHANGED
+        lifecycleState: LifecycleValue.Changed
       })
     } else {
       // console.log('---not changed');
@@ -286,12 +285,12 @@ export function handleTouchGamepadButton(event: CustomEvent): any {
 
   if (value) {
     // If the key is in the map but it's in the same state as now, let's skip it (debounce)
-    if (Engine.inputState.has(key) && Engine.inputState.get(key).value === BinaryValue.ON) {
-      if (Engine.inputState.get(key).lifecycleState !== LifecycleValue.CONTINUED) {
+    if (Engine.inputState.has(key) && Engine.inputState.get(key)?.value[0] === BinaryValue.ON) {
+      if (Engine.inputState.get(key)?.lifecycleState !== LifecycleValue.Continued) {
         Engine.inputState.set(key, {
           type: InputType.BUTTON,
-          value: BinaryValue.ON,
-          lifecycleState: LifecycleValue.CONTINUED
+          value: [BinaryValue.ON],
+          lifecycleState: LifecycleValue.Continued
         })
       }
       return
@@ -299,14 +298,14 @@ export function handleTouchGamepadButton(event: CustomEvent): any {
     // Set type to BUTTON (up/down discrete state) and value to up or down, depending on what the value is set to
     Engine.inputState.set(key, {
       type: InputType.BUTTON,
-      value: BinaryValue.ON,
-      lifecycleState: LifecycleValue.STARTED
+      value: [BinaryValue.ON],
+      lifecycleState: LifecycleValue.Started
     })
   } else {
     Engine.inputState.set(key, {
       type: InputType.BUTTON,
-      value: BinaryValue.OFF,
-      lifecycleState: LifecycleValue.ENDED
+      value: [BinaryValue.OFF],
+      lifecycleState: LifecycleValue.Ended
     })
   }
 }
@@ -324,28 +323,22 @@ export const handleMouseWheel = (event: WheelEvent): void => {
 
   if (event?.target !== EngineRenderer.instance.canvas) return
 
-  const value = event?.deltaY
+  const normalizedValues = normalizeWheel(event)
+  const value = normalizedValues?.spinY + Math.random() * 0.000001
 
   if (!Engine.inputState.has(MouseInput.MouseScroll)) {
     Engine.inputState.set(MouseInput.MouseScroll, {
       type: InputType.ONEDIM,
-      value: Math.sign(value),
-      lifecycleState: LifecycleValue.STARTED
+      value: [Math.sign(value)],
+      lifecycleState: LifecycleValue.Started
     })
   } else {
-    const oldValue = Engine.inputState.get(MouseInput.MouseScroll).value as number
-    if (oldValue === value) {
-      Engine.inputState.set(MouseInput.MouseScroll, {
-        type: InputType.ONEDIM,
-        value: value,
-        lifecycleState: LifecycleValue.UNCHANGED
-      })
-      return
-    }
+    const oldValue = Engine.inputState.get(MouseInput.MouseScroll)?.value[0] as number
+    const newValue = oldValue === value ? value : oldValue + Math.sign(value)
     Engine.inputState.set(MouseInput.MouseScroll, {
       type: InputType.ONEDIM,
-      value: oldValue + Math.sign(value),
-      lifecycleState: LifecycleValue.CHANGED
+      value: [newValue],
+      lifecycleState: LifecycleValue.Changed
     })
   }
 }
@@ -358,16 +351,8 @@ export const handleMouseWheel = (event: WheelEvent): void => {
  * @param elementHeight
  * @returns Normalized Mouse movement (x, y) where x and y are between 0 to 2 inclusively.
  */
-function normalizeMouseMovement(
-  x: number,
-  y: number,
-  elementWidth: number,
-  elementHeight: number
-): { x: number; y: number } {
-  return {
-    x: x / (elementWidth / 2),
-    y: -y / (elementHeight / 2)
-  }
+function normalizeMouseMovement(x: number, y: number, elementWidth: number, elementHeight: number) {
+  return [x / (elementWidth / 2), -y / (elementHeight / 2)]
 }
 
 /**
@@ -395,48 +380,40 @@ export const handleMouseMovement = (event: MouseEvent): void => {
     window.innerHeight
   )
   const mousePosition: [number, number] = [normalizedPosition.x, normalizedPosition.y]
+  const lastMousePosition = Engine.inputState.get(MouseInput.MousePosition)?.value! ?? mousePosition
 
   Engine.inputState.set(MouseInput.MousePosition, {
     type: InputType.TWODIM,
     value: mousePosition,
-    lifecycleState: Engine.inputState.has(MouseInput.MousePosition) ? LifecycleValue.CHANGED : LifecycleValue.STARTED
+    lifecycleState: Engine.inputState.has(MouseInput.MousePosition) ? LifecycleValue.Changed : LifecycleValue.Started
   })
 
-  const normalizedMovement = normalizeMouseMovement(
-    event.movementX,
-    event.movementY,
-    window.outerWidth,
-    window.outerHeight
-  )
-
-  const mouseMovement: [number, number] = [normalizedMovement.x, normalizedMovement.y]
+  const mouseMovement = [mousePosition[0] - lastMousePosition[0], mousePosition[1] - lastMousePosition[1]]
 
   Engine.inputState.set(MouseInput.MouseMovement, {
     type: InputType.TWODIM,
     value: mouseMovement,
-    lifecycleState: Engine.inputState.has(MouseInput.MouseMovement) ? LifecycleValue.CHANGED : LifecycleValue.STARTED
+    lifecycleState: Engine.inputState.has(MouseInput.MouseMovement) ? LifecycleValue.Changed : LifecycleValue.Started
   })
 
   const isDragging = Engine.inputState.get(MouseInput.MouseClickDownPosition)
 
-  let value = [0, 0] as NumericalType
-  if (isDragging && isDragging?.lifecycleState !== LifecycleValue.ENDED) {
-    value = mouseMovement
+  if (isDragging && isDragging?.lifecycleState !== LifecycleValue.Ended) {
     callback = setTimeout(() => {
       Engine.inputState.set(MouseInput.MouseClickDownMovement, {
         type: InputType.TWODIM,
         value: [0, 0],
         lifecycleState: Engine.inputState.has(MouseInput.MouseClickDownMovement)
-          ? LifecycleValue.CHANGED
-          : LifecycleValue.STARTED
+          ? LifecycleValue.Changed
+          : LifecycleValue.Started
       })
     }, 50)
     Engine.inputState.set(MouseInput.MouseClickDownMovement, {
       type: InputType.TWODIM,
-      value: value,
+      value: mouseMovement,
       lifecycleState: Engine.inputState.has(MouseInput.MouseClickDownMovement)
-        ? LifecycleValue.CHANGED
-        : LifecycleValue.STARTED
+        ? LifecycleValue.Changed
+        : LifecycleValue.Started
     })
   }
 }
@@ -464,8 +441,8 @@ export const handleMouseButton = (event: MouseEvent): void => {
     // Set type to BUTTON and value to up or down
     Engine.inputState.set(event.button, {
       type: InputType.BUTTON,
-      value: BinaryValue.ON,
-      lifecycleState: LifecycleValue.STARTED
+      value: [BinaryValue.ON],
+      lifecycleState: LifecycleValue.Started
     })
 
     // TODO: this would not be set if none of buttons assigned
@@ -473,29 +450,29 @@ export const handleMouseButton = (event: MouseEvent): void => {
     Engine.inputState.set(MouseInput.MouseClickDownPosition, {
       type: InputType.TWODIM,
       value: mousePosition,
-      lifecycleState: LifecycleValue.STARTED
+      lifecycleState: LifecycleValue.Started
     })
   } else {
     // Removed mouse Engine.inputState data
     Engine.inputState.set(event.button, {
       type: InputType.BUTTON,
-      value: BinaryValue.OFF,
-      lifecycleState: LifecycleValue.ENDED
+      value: [BinaryValue.OFF],
+      lifecycleState: LifecycleValue.Ended
     })
     Engine.inputState.set(MouseInput.MouseClickDownPosition, {
       type: InputType.TWODIM,
       value: mousePosition,
-      lifecycleState: LifecycleValue.ENDED
+      lifecycleState: LifecycleValue.Ended
     })
     Engine.inputState.set(MouseInput.MouseClickDownTransformRotation, {
       type: InputType.TWODIM,
       value: mousePosition,
-      lifecycleState: LifecycleValue.ENDED
+      lifecycleState: LifecycleValue.Ended
     })
     Engine.inputState.set(MouseInput.MouseClickDownMovement, {
       type: InputType.TWODIM,
       value: [0, 0],
-      lifecycleState: LifecycleValue.ENDED
+      lifecycleState: LifecycleValue.Ended
     })
   }
 }
@@ -520,16 +497,16 @@ export const handleKey = (event: KeyboardEvent): any => {
     return
   }
   // const mappedKey = Engine.inputState.schema.keyboardInputMap[];
-  const key = event.key.toLowerCase()
+  const key = event.code
 
   if (keydown) {
     // If the key is in the map but it's in the same state as now, let's skip it (debounce)
-    if (Engine.inputState.has(key) && Engine.inputState.get(key).value === BinaryValue.ON) {
-      if (Engine.inputState.get(key).lifecycleState !== LifecycleValue.CONTINUED) {
+    if (Engine.inputState.has(key) && Engine.inputState.get(key)?.value[0] === BinaryValue.ON) {
+      if (Engine.inputState.get(key)?.lifecycleState !== LifecycleValue.Continued) {
         Engine.inputState.set(key, {
           type: InputType.BUTTON,
-          value: BinaryValue.ON,
-          lifecycleState: LifecycleValue.CONTINUED
+          value: [BinaryValue.ON],
+          lifecycleState: LifecycleValue.Continued
         })
       }
       return
@@ -537,14 +514,14 @@ export const handleKey = (event: KeyboardEvent): any => {
     // Set type to BUTTON (up/down discrete state) and value to up or down, depending on what the value is set to
     Engine.inputState.set(key, {
       type: InputType.BUTTON,
-      value: BinaryValue.ON,
-      lifecycleState: LifecycleValue.STARTED
+      value: [BinaryValue.ON],
+      lifecycleState: LifecycleValue.Started
     })
   } else {
     Engine.inputState.set(key, {
       type: InputType.BUTTON,
-      value: BinaryValue.OFF,
-      lifecycleState: LifecycleValue.ENDED
+      value: [BinaryValue.OFF],
+      lifecycleState: LifecycleValue.Ended
     })
   }
 }
@@ -552,11 +529,11 @@ export const handleKey = (event: KeyboardEvent): any => {
 export const handleWindowFocus = (event: FocusEvent) => {
   if (event.type === 'focus')
     Engine.inputState.forEach((value, key) => {
-      if (value.type === InputType.BUTTON && value.value === BinaryValue.ON) {
+      if (value.type === InputType.BUTTON && value.value[0] === BinaryValue.ON) {
         Engine.inputState.set(key, {
           type: InputType.BUTTON,
-          value: BinaryValue.OFF,
-          lifecycleState: LifecycleValue.ENDED
+          value: [BinaryValue.OFF],
+          lifecycleState: LifecycleValue.Ended
         })
       }
     })
@@ -565,19 +542,15 @@ export const handleWindowFocus = (event: FocusEvent) => {
 export const handleVisibilityChange = (event: Event) => {
   if (document.visibilityState === 'hidden') {
     Engine.inputState.forEach((value, key) => {
-      if (value.type === InputType.BUTTON && value.value === BinaryValue.ON) {
+      if (value.type === InputType.BUTTON && value.value[0] === BinaryValue.ON) {
         Engine.inputState.set(key, {
           type: InputType.BUTTON,
-          value: BinaryValue.OFF,
-          lifecycleState: LifecycleValue.ENDED
+          value: [BinaryValue.OFF],
+          lifecycleState: LifecycleValue.Ended
         })
       }
     })
   }
-  EngineEvents.instance.dispatchEvent({
-    type: EngineEvents.EVENTS.WINDOW_FOCUS,
-    focused: document.visibilityState === 'visible'
-  })
 }
 
 /**
@@ -603,29 +576,29 @@ export const handleMouseLeave = (event: MouseEvent): void => {
     }
     Engine.inputState.set(button, {
       type: InputType.BUTTON,
-      value: BinaryValue.OFF,
-      lifecycleState: LifecycleValue.ENDED
+      value: [BinaryValue.OFF],
+      lifecycleState: LifecycleValue.Ended
     })
   })
 
   if (Engine.inputState.has(MouseInput.MouseClickDownPosition)) {
-    const value = Engine.inputState.get(MouseInput.MouseClickDownPosition).value
+    const value = Engine.inputState.get(MouseInput.MouseClickDownPosition)?.value as number[]
     if (value[0] !== 0 || value[1] !== 0) {
       Engine.inputState.set(MouseInput.MouseClickDownPosition, {
         type: InputType.TWODIM,
         value: [0, 0],
-        lifecycleState: LifecycleValue.ENDED
+        lifecycleState: LifecycleValue.Ended
       })
     }
   }
 
   if (Engine.inputState.has(MouseInput.MouseClickDownTransformRotation)) {
-    const value = Engine.inputState.get(MouseInput.MouseClickDownTransformRotation).value
+    const value = Engine.inputState.get(MouseInput.MouseClickDownTransformRotation)?.value as number[]
     if (value[0] !== 0 || value[1] !== 0) {
       Engine.inputState.set(MouseInput.MouseClickDownTransformRotation, {
         type: InputType.TWODIM,
         value: [0, 0],
-        lifecycleState: LifecycleValue.ENDED
+        lifecycleState: LifecycleValue.Ended
       })
     }
   }

@@ -1,4 +1,3 @@
-import { ServiceAddons } from '@feathersjs/feathers'
 import { Application } from '../../../declarations'
 import { Message } from './message.class'
 import createModel from './message.model'
@@ -7,11 +6,11 @@ import messageDocs from './message.docs'
 
 declare module '../../../declarations' {
   interface ServiceTypes {
-    message: Message & ServiceAddons<any>
+    message: Message
   }
 }
 
-export default (app: Application): any => {
+export default (app: Application) => {
   const options = {
     Model: createModel(app),
     paginate: app.get('paginate')
@@ -24,7 +23,7 @@ export default (app: Application): any => {
    */
   const event = new Message(options, app)
   event.docs = messageDocs
-  app.use('/message', event)
+  app.use('message', event)
 
   /**
    * Get our initialized service so that we can register hooks
@@ -33,7 +32,7 @@ export default (app: Application): any => {
    */
   const service = app.service('message')
 
-  service.hooks(hooks as any)
+  service.hooks(hooks)
 
   /**
    * A function which is used to create message
@@ -45,7 +44,7 @@ export default (app: Application): any => {
   service.publish('created', async (data): Promise<any> => {
     data.sender = await app.service('user').get(data.senderId)
     const channel = await app.service('channel').get(data.channelId)
-    let targetIds = []
+    let targetIds: any[] = []
     if (channel.channelType === 'party') {
       const partyUsers = await app.service('party-user').find({
         query: {
@@ -103,7 +102,7 @@ export default (app: Application): any => {
   service.publish('removed', async (data): Promise<any> => {
     data.sender = await app.service('user').get(data.senderId)
     const channel = await app.service('channel').get(data.channelId)
-    let targetIds = []
+    let targetIds: any[] = []
     if (channel.channelType === 'party') {
       const partyUsers = await app.service('party-user').find({
         query: {
@@ -161,7 +160,7 @@ export default (app: Application): any => {
   service.publish('patched', async (data): Promise<any> => {
     data.sender = await app.service('user').get(data.senderId)
     const channel = await app.service('channel').get(data.channelId)
-    let targetIds = []
+    let targetIds: any[] = []
     if (channel.channelType === 'party') {
       const partyUsers = await app.service('party-user').find({
         query: {

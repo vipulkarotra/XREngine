@@ -1,11 +1,10 @@
-import React, { Component } from 'react'
-import PropTypes from 'prop-types'
+import React, { useState } from 'react'
 import NumericInput from './NumericInput'
 import Scrubber from './Scrubber'
 import { Vector2 } from 'three'
 import styled from 'styled-components'
-import { Link } from '@styled-icons/fa-solid/Link'
-import { Unlink } from '@styled-icons/fa-solid/Unlink'
+import LinkIcon from '@mui/icons-material/Link'
+import LinkOffIcon from '@mui/icons-material/LinkOff'
 import Hidden from '../layout/Hidden'
 
 export const Vector2InputContainer = (styled as any).div`
@@ -42,100 +41,82 @@ const UniformButtonContainer = (styled as any).div`
 
 let uniqueId = 0
 
+type StateType = {
+  uniformEnabled: any
+  value: any
+}
+
+interface Vector2InputProp {
+  value?: any
+  onChange?: Function
+  uniformScaling?: boolean
+}
+
 /**
  *
  * @author Robert Long
  */
-export class Vector2Input extends Component {
-  static propTypes = {
-    uniformScaling: PropTypes.bool,
-    value: PropTypes.object,
-    onChange: PropTypes.func
+export const Vector2Input = (props: Vector2InputProp) => {
+  const id = uniqueId++
+  const newValue = new Vector2()
+  const [uniformEnabled, setUniformEnabled] = useState(props.uniformScaling)
+
+  const onToggleUniform = () => {
+    setUniformEnabled(!uniformEnabled)
   }
 
-  static defaultProps = {
-    value: new Vector2(),
-    onChange: () => {}
-  }
+  const onChange = (field, fieldValue) => {
+    const { value, onChange } = props
 
-  constructor(props) {
-    super(props)
-
-    this.id = uniqueId++
-
-    this.newValue = new Vector2()
-
-    this.state = {
-      ...this.state,
-      uniformEnabled: props.uniformScaling
-    }
-  }
-
-  state: {
-    uniformEnabled: any
-    value: any
-  }
-  id: number
-  newValue: Vector2
-
-  onToggleUniform = () => {
-    this.setState({ uniformEnabled: !this.state.uniformEnabled })
-  }
-
-  onChange = (field, fieldValue) => {
-    const value = (this.props as any).value
-
-    if (this.state.uniformEnabled) {
-      this.newValue.set(fieldValue, fieldValue)
+    if (uniformEnabled) {
+      newValue.set(fieldValue, fieldValue)
     } else {
       const x = value ? value.x : 0
       const y = value ? value.y : 0
 
-      this.newValue.x = field === 'x' ? fieldValue : x
-      this.newValue.y = field === 'y' ? fieldValue : y
+      newValue.x = field === 'x' ? fieldValue : x
+      newValue.y = field === 'y' ? fieldValue : y
     }
 
-    ;(this.props as any).onChange(this.newValue)
+    if (typeof onChange === 'function') {
+      onChange(newValue)
+    }
   }
 
-  onChangeX = (x) => this.onChange('x', x)
+  const onChangeX = (x) => onChange('x', x)
 
-  onChangeY = (y) => this.onChange('y', y)
+  const onChangeY = (y) => onChange('y', y)
 
-  render() {
-    const { uniformScaling, value, onChange, ...rest } = this.props as any
-    const { uniformEnabled } = this.state as any
-    const vx = value ? value.x : 0
-    const vy = value ? value.y : 0
-    const checkboxId = 'uniform-button-' + this.id
+  const { uniformScaling, value, ...rest } = props
+  const vx = value ? value.x : 0
+  const vy = value ? value.y : 0
+  const checkboxId = 'uniform-button-' + id
 
-    return (
-      <Vector2InputContainer>
-        {uniformScaling && (
-          <UniformButtonContainer>
-            <Hidden
-              as="input"
-              id={checkboxId}
-              type="checkbox"
-              checked={uniformEnabled}
-              onChange={this.onToggleUniform}
-            />
-            <label title="Uniform Scale" htmlFor={checkboxId}>
-              {uniformEnabled ? <Link /> : <Unlink />}
-            </label>
-          </UniformButtonContainer>
-        )}
-        <Vector2Scrubber {...rest} tag="div" value={vx} onChange={this.onChangeX}>
-          X:
-        </Vector2Scrubber>
-        <NumericInput {...rest} value={vx} onChange={this.onChangeX} />
-        <Vector2Scrubber {...rest} tag="div" value={vy} onChange={this.onChangeY}>
-          Y:
-        </Vector2Scrubber>
-        <NumericInput {...rest} value={vy} onChange={this.onChangeY} />
-      </Vector2InputContainer>
-    )
-  }
+  return (
+    <Vector2InputContainer>
+      {uniformScaling && (
+        <UniformButtonContainer>
+          <Hidden as="input" id={checkboxId} type="checkbox" checked={uniformEnabled} onChange={onToggleUniform} />
+          <label title="Uniform Scale" htmlFor={checkboxId}>
+            {uniformEnabled ? <LinkIcon /> : <LinkOffIcon />}
+          </label>
+        </UniformButtonContainer>
+      )}
+      <Vector2Scrubber {...rest} tag="div" value={vx} onChange={onChangeX}>
+        X:
+      </Vector2Scrubber>
+      <NumericInput {...rest} value={vx} onChange={onChangeX} />
+      <Vector2Scrubber {...rest} tag="div" value={vy} onChange={onChangeY}>
+        Y:
+      </Vector2Scrubber>
+      <NumericInput {...rest} value={vy} onChange={onChangeY} />
+    </Vector2InputContainer>
+  )
+}
+
+Vector2Input.defaultProps = {
+  value: new Vector2(),
+  onChange: () => {}
 }
 
 export default Vector2Input

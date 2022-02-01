@@ -1,14 +1,10 @@
-import { Types } from 'bitecs'
 import { AnimationClip, AnimationMixer } from 'three'
-import { createMappedComponent, getComponent } from '../../ecs/functions/EntityFunctions'
+import { createMappedComponent } from '../../ecs/functions/ComponentFunctions'
 
 type AnimationComponentType = {
   mixer: AnimationMixer
   animations: AnimationClip[]
+  animationSpeed: number
 }
 
-const AnimationSchema = {
-  animationSpeed: Types.ui16
-}
-
-export const AnimationComponent = createMappedComponent<AnimationComponentType, typeof AnimationSchema>(AnimationSchema)
+export const AnimationComponent = createMappedComponent<AnimationComponentType>('AnimationComponent')

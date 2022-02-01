@@ -1,108 +1,71 @@
-import React, { ReactElement, useEffect } from 'react'
-import { fetchAdminLocations, fetchLocationTypes } from '../../reducers/admin/location/service'
-import Table from '@material-ui/core/Table'
-import TableBody from '@material-ui/core/TableBody'
-import TableCell from '@material-ui/core/TableCell'
-import TableContainer from '@material-ui/core/TableContainer'
-import TableHead from '@material-ui/core/TableHead'
-import TableRow from '@material-ui/core/TableRow'
-import { useLocationStyles, useLocationStyle } from './styles'
-import { bindActionCreators, Dispatch } from 'redux'
-import { selectAuthState } from '../../../user/reducers/auth/selector'
-import { selectAppState } from '../../../common/reducers/app/selector'
-import { selectAdminLocationState } from '../../reducers/admin/location/selector'
-import { selectAdminInstanceState } from '../../reducers/admin/instance/selector'
-import { selectAdminUserState } from '../../reducers/admin/user/selector'
-import { fetchAdminScenes } from '../../reducers/admin/scene/service'
-import { selectAdminSceneState } from '../../reducers/admin/scene/selector'
-import { fetchUsersAsAdmin } from '../../reducers/admin/user/service'
-import { fetchAdminInstances } from '../../reducers/admin/instance/service'
-import { connect } from 'react-redux'
+import Avatar from '@mui/material/Avatar'
+import Chip from '@mui/material/Chip'
+import React, { ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { columns, Props } from './variable'
-import Chip from '@material-ui/core/Chip'
-import Avatar from '@material-ui/core/Avatar'
-import TablePagination from '@material-ui/core/TablePagination'
-import Dialog from '@material-ui/core/Dialog'
-import DialogActions from '@material-ui/core/DialogActions'
-import DialogTitle from '@material-ui/core/DialogTitle'
-import Button from '@material-ui/core/Button'
-import { removeLocation } from '../../reducers/admin/location/service'
+import { useErrorState } from '../../../common/services/ErrorService'
+import { useDispatch } from '../../../store'
+import { useAuthState } from '../../../user/services/AuthService'
+import ConfirmModel from '../../common/ConfirmModel'
+import { useFetchAdminInstance } from '../../common/hooks/Instance.hooks'
+import { useFetchAdminScenes, useFetchLocation, useFetchLocationTypes } from '../../common/hooks/Location.hooks'
+import { useFetchUsersAsAdmin } from '../../common/hooks/User.hooks'
+import TableComponent from '../../common/Table'
+import { locationColumns, LocationProps } from '../../common/variables/location'
+import { InstanceService, useInstanceState } from '../../services/InstanceService'
+import { LocationService, LOCATION_PAGE_LIMIT, useLocationState } from '../../services/LocationService'
+import { SceneService } from '../../services/SceneService'
+import { UserService, useUserState } from '../../services/UserService'
+import { useStyles } from '../../styles/ui'
 import ViewLocation from './ViewLocation'
 
-const mapStateToProps = (state: any): any => {
-  return {
-    appState: selectAppState(state),
-    authState: selectAuthState(state),
-    adminLocationState: selectAdminLocationState(state),
-    adminUserState: selectAdminUserState(state),
-    adminInstanceState: selectAdminInstanceState(state),
-    adminSceneState: selectAdminSceneState(state)
-  }
-}
+const LocationTable = (props: LocationProps) => {
+  const { search } = props
+  const classes = useStyles()
+  const adminInstanceState = useInstanceState()
 
-const mapDispatchToProps = (dispatch: Dispatch): any => ({
-  fetchAdminLocations: bindActionCreators(fetchAdminLocations, dispatch),
-  fetchAdminScenes: bindActionCreators(fetchAdminScenes, dispatch),
-  fetchLocationTypes: bindActionCreators(fetchLocationTypes, dispatch),
-  fetchUsersAsAdmin: bindActionCreators(fetchUsersAsAdmin, dispatch),
-  fetchAdminInstances: bindActionCreators(fetchAdminInstances, dispatch),
-  removeLocation: bindActionCreators(removeLocation, dispatch)
-})
-
-const LocationTable = (props: Props) => {
-  const classes = useLocationStyles()
-  const classex = useLocationStyle()
-  const {
-    authState,
-    fetchAdminLocations,
-    fetchAdminScenes,
-    fetchLocationTypes,
-    fetchUsersAsAdmin,
-    fetchAdminInstances,
-    adminLocationState,
-    adminUserState,
-    adminInstanceState,
-    adminSceneState,
-    removeLocation
-  } = props
   const [page, setPage] = React.useState(0)
-  const [rowsPerPage, setRowsPerPage] = React.useState(12)
+  const [rowsPerPage, setRowsPerPage] = React.useState(LOCATION_PAGE_LIMIT)
   const [popConfirmOpen, setPopConfirmOpen] = React.useState(false)
   const [locationId, setLocationId] = React.useState('')
+  const [locationName, setLocationName] = React.useState('')
   const [viewModel, setViewModel] = React.useState(false)
   const [locationAdmin, setLocationAdmin] = React.useState('')
-  const user = authState.get('user')
-  const adminLocations = adminLocationState.get('locations').get('locations')
-  const adminLocationCount = adminLocationState.get('locations').get('total')
+  const dispatch = useDispatch()
+  const authState = useAuthState()
+  const user = authState.user
+  const adminScopeReadErrMsg = useErrorState().readError.scopeErrorMessage
+  const adminLocationState = useLocationState()
+  const adminLocations = adminLocationState.locations
+  const adminLocationCount = adminLocationState.total
+
+  // Call custom hooks
   const { t } = useTranslation()
+  const adminUserState = useUserState()
+  useFetchLocation(user, adminLocationState, adminScopeReadErrMsg, search, LocationService)
+  useFetchAdminScenes(user, SceneService)
+  useFetchLocationTypes(user, adminLocationState, LocationService)
+  useFetchUsersAsAdmin(user, adminUserState, UserService, null)
+  useFetchAdminInstance(user, adminInstanceState, InstanceService)
 
   const handlePageChange = (event: unknown, newPage: number) => {
+    const incDec = page < newPage ? 'increment' : 'decrement'
+    LocationService.fetchAdminLocations(incDec)
     setPage(newPage)
+  }
+
+  const handleCloseModel = () => {
+    setPopConfirmOpen(false)
+  }
+
+  const submitRemoveLocation = async () => {
+    await LocationService.removeLocation(locationId)
+    setPopConfirmOpen(false)
   }
 
   const handleRowsPerPageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setRowsPerPage(+event.target.value)
     setPage(0)
   }
-
-  useEffect(() => {
-    if (user?.id != null && adminLocationState.get('locations').get('updateNeeded') === true) {
-      fetchAdminLocations()
-    }
-    if (user?.id != null && adminSceneState.get('scenes').get('updateNeeded') === true) {
-      fetchAdminScenes()
-    }
-    if (user?.id != null && adminLocationState.get('locationTypes').get('updateNeeded') === true) {
-      fetchLocationTypes()
-    }
-    if (user?.id != null && adminUserState.get('users').get('updateNeeded') === true) {
-      fetchUsersAsAdmin()
-    }
-    if (user?.id != null && adminInstanceState.get('instances').get('updateNeeded') === true) {
-      fetchAdminInstances()
-    }
-  }, [authState, adminSceneState, adminInstanceState, adminLocationState])
 
   const openViewModel = (open: boolean, location: any) => (event: React.KeyboardEvent | React.MouseEvent) => {
     if (
@@ -144,33 +107,34 @@ const LocationTable = (props: Props) => {
       videoEnabled,
       action: (
         <>
-          <a href="#h" className={classex.actionStyle} onClick={openViewModel(true, el)}>
-            <span className={classex.spanWhite}>View</span>
+          <a href="#h" className={classes.actionStyle} onClick={openViewModel(true, el)}>
+            <span className={classes.spanWhite}>View</span>
           </a>
           <a
             href="#h"
-            className={classex.actionStyle}
+            className={classes.actionStyle}
             onClick={() => {
               setPopConfirmOpen(true)
               setLocationId(id)
+              setLocationName(name)
             }}
           >
-            {' '}
-            <span className={classex.spanDange}>Delete</span>{' '}
+            <span className={classes.spanDange}>Delete</span>
           </a>
         </>
       )
     }
   }
 
-  const rows = adminLocations.map((el) => {
+  const rows = adminLocations.value.map((el) => {
     return createData(
       el,
       el.id,
       el.name,
       el.sceneId,
-      el.maxUsersPerInstance,
+      el.maxUsersPerInstance.toString(),
       el.slugifiedName,
+      //@ts-ignore
       el.location_setting?.locationType,
       <div>
         {' '}
@@ -190,85 +154,38 @@ const LocationTable = (props: Props) => {
           />
         )}{' '}
       </div>,
-      <div> {el.location_setting?.instanceMediaChatEnabled ? 'Yes' : 'No'} </div>,
-      <div> {el.location_setting?.videoEnabled ? 'Yes' : 'No'}</div>
+      <div>
+        {/**@ts-ignore*/}
+        {el.location_setting?.instanceMediaChatEnabled ? 'Yes' : 'No'}{' '}
+      </div>,
+      <div>
+        {/**@ts-ignore*/}
+        {el.location_setting?.videoEnabled ? 'Yes' : 'No'}
+      </div>
     )
   })
 
   return (
-    <div>
-      <TableContainer className={classes.container}>
-        <Table stickyHeader aria-label="sticky table">
-          <TableHead>
-            <TableRow>
-              {columns.map((column) => (
-                <TableCell
-                  key={column.id}
-                  align={column.align}
-                  style={{ minWidth: column.minWidth }}
-                  className={classex.tableCellHeader}
-                >
-                  {column.label}
-                </TableCell>
-              ))}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {rows.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((row, id) => {
-              return (
-                <TableRow hover role="checkbox" tabIndex={-1} key={row.id}>
-                  {columns.map((column) => {
-                    const value = row[column.id]
-                    return (
-                      <TableCell key={column.id} align={column.align} className={classex.tableCellBody}>
-                        {value}
-                      </TableCell>
-                    )
-                  })}
-                </TableRow>
-              )
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
-      <TablePagination
-        rowsPerPageOptions={[12]}
-        component="div"
-        count={adminLocationCount}
-        rowsPerPage={rowsPerPage}
+    <React.Fragment>
+      <TableComponent
+        rows={rows}
+        column={locationColumns}
         page={page}
-        onPageChange={handlePageChange}
-        onRowsPerPageChange={handleRowsPerPageChange}
-        className={classex.tableFooter}
+        rowsPerPage={rowsPerPage}
+        count={adminLocationCount.value}
+        handlePageChange={handlePageChange}
+        handleRowsPerPageChange={handleRowsPerPageChange}
       />
-      <Dialog
-        open={popConfirmOpen}
-        onClose={() => setPopConfirmOpen(false)}
-        aria-labelledby="alert-dialog-title"
-        aria-describedby="alert-dialog-description"
-        classes={{ paper: classes.paperDialog }}
-      >
-        <DialogTitle id="alert-dialog-title">Confirm location deletion</DialogTitle>
-        <DialogActions>
-          <Button onClick={() => setPopConfirmOpen(false)} className={classes.spanNone}>
-            Cancel
-          </Button>
-          <Button
-            className={classes.spanDange}
-            onClick={async () => {
-              await removeLocation(locationId)
-              setPopConfirmOpen(false)
-            }}
-            autoFocus
-          >
-            Confirm
-          </Button>
-        </DialogActions>
-      </Dialog>
-
+      <ConfirmModel
+        popConfirmOpen={popConfirmOpen}
+        handleCloseModel={handleCloseModel}
+        submit={submitRemoveLocation}
+        name={locationName}
+        label={'location'}
+      />
       <ViewLocation openView={viewModel} closeViewModel={closeViewModel} locationAdmin={locationAdmin} />
-    </div>
+    </React.Fragment>
   )
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(LocationTable)
+export default LocationTable

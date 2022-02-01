@@ -1,19 +1,18 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import InputGroup from '../inputs/InputGroup'
-import BooleanInput from '../inputs/BooleanInput'
 import SelectInput from '../inputs/SelectInput'
 import NumericInputGroup from '../inputs/NumericInputGroup'
 import CompoundNumericInput from '../inputs/CompoundNumericInput'
-import {
-  AudioType,
-  AudioTypeOptions,
-  DistanceModelOptions,
-  DistanceModelType
-} from '@xrengine/engine/src/scene/classes/AudioSource'
-import useSetPropertySelected from './useSetPropertySelected'
+import { EditorComponentType, updateProperty } from './Util'
 import { useTranslation } from 'react-i18next'
-import NumericInput from '../inputs/NumericInput'
+import { getComponent } from '@xrengine/engine/src/ecs/functions/ComponentFunctions'
+import { AudioComponent } from '@xrengine/engine/src/audio/components/AudioComponent'
+import { AudioType, DistanceModel, DistanceModelOptions } from '@xrengine/engine/src/audio/constants/AudioConstants'
+
+const AudioTypeOptions = [
+  { label: AudioType.Stereo, value: AudioType.Stereo },
+  { label: AudioType.Positional, value: AudioType.Positional }
+]
 
 /**
  *
@@ -22,87 +21,42 @@ import NumericInput from '../inputs/NumericInput'
  *
  * @author Robert Long
  * @param       {any} node
- * @param       {any} editor
  * @param       {any} multiEdit
  * @constructor
  */
 
-export function AudioSourceProperties({ node, editor, multiEdit }) {
-  const onChangeControls = useSetPropertySelected(editor, 'controls')
-  const onChangeAutoPlay = useSetPropertySelected(editor, 'autoPlay')
-  const onChangeSynchronize = useSetPropertySelected(editor, 'synchronize')
-  const onChangeLoop = useSetPropertySelected(editor, 'loop')
-  const onChangeAudioType = useSetPropertySelected(editor, 'audioType')
-  const onChangeVolume = useSetPropertySelected(editor, 'volume')
-  const onChangeDistanceModel = useSetPropertySelected(editor, 'distanceModel')
-  const onChangeRolloffFactor = useSetPropertySelected(editor, 'rolloffFactor')
-  const onChangeRefDistance = useSetPropertySelected(editor, 'refDistance')
-  const onChangeMaxDistance = useSetPropertySelected(editor, 'maxDistance')
-  const onChangeConeInnerAngle = useSetPropertySelected(editor, 'coneInnerAngle')
-  const onChangeConeOuterAngle = useSetPropertySelected(editor, 'coneOuterAngle')
-  const onChangeConeOuterGain = useSetPropertySelected(editor, 'coneOuterGain')
+export const AudioSourceProperties: EditorComponentType = (props) => {
   const { t } = useTranslation()
 
-  // TODO: Make node audio settings work with multi-edit
-  // returning view containing inputs to customize audio element
+  const audioComponent = getComponent(props.node.entity, AudioComponent)
+
   return (
     <>
-      {/* @ts-ignore */}
-      <InputGroup
-        name="Controls"
-        label={t('editor:properties.audio.lbl-controls')}
-        info={t('editor:properties.audio.info-controls')}
-      >
-        <BooleanInput value={node.controls} onChange={onChangeControls} />
-      </InputGroup>
-      {/* @ts-ignore */}
-      <InputGroup
-        name="Auto Play"
-        label={t('editor:properties.audio.lbl-autoplay')}
-        info={t('editor:properties.audio.info-autoplay')}
-      >
-        <BooleanInput value={node.autoPlay} onChange={onChangeAutoPlay} />
-      </InputGroup>
-      {/* @ts-ignore */}
-      <InputGroup
-        name="Synchronize"
-        label={t('editor:properties.audio.lbl-synchronize')}
-        info={t('editor:properties.audio.info-synchronize')}
-      >
-        {/* @ts-ignore */}
-        <NumericInput value={node.synchronize} onChange={onChangeSynchronize} />
-      </InputGroup>
-      {/* @ts-ignore */}
-      <InputGroup
-        name="Loop"
-        label={t('editor:properties.audio.lbl-loop')}
-        info={t('editor:properties.audio.info-loop')}
-      >
-        <BooleanInput value={node.loop} onChange={onChangeLoop} />
-      </InputGroup>
-      {/* @ts-ignore */}
       <InputGroup name="Audio Type" label={t('editor:properties.audio.lbl-audioType')}>
-        {/* @ts-ignore */}
-        <SelectInput options={AudioTypeOptions} value={node.audioType} onChange={onChangeAudioType} />
+        <SelectInput
+          options={AudioTypeOptions}
+          value={audioComponent.audioType}
+          onChange={updateProperty(AudioComponent, 'audioType')}
+        />
       </InputGroup>
-      {/* @ts-ignore */}
       <InputGroup name="Volume" label={t('editor:properties.audio.lbl-volume')}>
-        <CompoundNumericInput value={node.volume} onChange={onChangeVolume} />
+        <CompoundNumericInput value={audioComponent.volume} onChange={updateProperty(AudioComponent, 'volume')} />
       </InputGroup>
-      {!multiEdit && node.audioType === AudioType.PannerNode && (
+      {!props.multiEdit && audioComponent.audioType === AudioType.Positional && (
         <>
-          {/* @ts-ignore */}
           <InputGroup
             name="Distance Model"
             label={t('editor:properties.audio.lbl-distanceModel')}
             info={t('editor:properties.audio.info-distanceModel')}
           >
-            {/* @ts-ignore */}
-            <SelectInput options={DistanceModelOptions} value={node.distanceModel} onChange={onChangeDistanceModel} />
+            <SelectInput
+              options={DistanceModelOptions}
+              value={audioComponent.distanceModel}
+              onChange={updateProperty(AudioComponent, 'distanceModel')}
+            />
           </InputGroup>
 
-          {node.distanceModel === DistanceModelType.Linear ? (
-            /* @ts-ignore */
+          {audioComponent.distanceModel === DistanceModel.Linear ? (
             <InputGroup
               name="Rolloff Factor"
               label={t('editor:properties.audio.lbl-rolloffFactor')}
@@ -114,12 +68,11 @@ export function AudioSourceProperties({ node, editor, multiEdit }) {
                 smallStep={0.001}
                 mediumStep={0.01}
                 largeStep={0.1}
-                value={node.rolloffFactor}
-                onChange={onChangeRolloffFactor}
+                value={audioComponent.rolloffFactor}
+                onChange={updateProperty(AudioComponent, 'rolloffFactor')}
               />
             </InputGroup>
           ) : (
-            /* @ts-ignore */
             <NumericInputGroup
               name="Rolloff Factor"
               label={t('editor:properties.audio.lbl-rolloffFactor')}
@@ -128,11 +81,10 @@ export function AudioSourceProperties({ node, editor, multiEdit }) {
               smallStep={0.1}
               mediumStep={1}
               largeStep={10}
-              value={node.rolloffFactor}
-              onChange={onChangeRolloffFactor}
+              value={audioComponent.rolloffFactor}
+              onChange={updateProperty(AudioComponent, 'rolloffFactor')}
             />
           )}
-          {/* @ts-ignore */}
           <NumericInputGroup
             name="Ref Distance"
             label={t('editor:properties.audio.lbl-refDistance')}
@@ -141,11 +93,10 @@ export function AudioSourceProperties({ node, editor, multiEdit }) {
             smallStep={0.1}
             mediumStep={1}
             largeStep={10}
-            value={node.refDistance}
-            onChange={onChangeRefDistance}
+            value={audioComponent.refDistance}
+            onChange={updateProperty(AudioComponent, 'refDistance')}
             unit="m"
           />
-          {/* @ts-ignore */}
           <NumericInputGroup
             name="Max Distance"
             label={t('editor:properties.audio.lbl-maxDistance')}
@@ -154,11 +105,10 @@ export function AudioSourceProperties({ node, editor, multiEdit }) {
             smallStep={0.1}
             mediumStep={1}
             largeStep={10}
-            value={node.maxDistance}
-            onChange={onChangeMaxDistance}
+            value={audioComponent.maxDistance}
+            onChange={updateProperty(AudioComponent, 'maxDistance')}
             unit="m"
           />
-          {/* @ts-ignore */}
           <NumericInputGroup
             name="Cone Inner Angle"
             label={t('editor:properties.audio.lbl-coneInnerAngle')}
@@ -168,12 +118,10 @@ export function AudioSourceProperties({ node, editor, multiEdit }) {
             smallStep={0.1}
             mediumStep={1}
             largeStep={10}
-            value={node.coneInnerAngle}
-            onChange={onChangeConeInnerAngle}
+            value={audioComponent.coneInnerAngle}
+            onChange={updateProperty(AudioComponent, 'coneInnerAngle')}
             unit="°"
-            disabled={multiEdit}
           />
-          {/* @ts-ignore */}
           <NumericInputGroup
             name="Cone Outer Angle"
             label={t('editor:properties.audio.lbl-coneOuterAngle')}
@@ -183,12 +131,10 @@ export function AudioSourceProperties({ node, editor, multiEdit }) {
             smallStep={0.1}
             mediumStep={1}
             largeStep={10}
-            value={node.coneOuterAngle}
-            onChange={onChangeConeOuterAngle}
+            value={audioComponent.coneOuterAngle}
+            onChange={updateProperty(AudioComponent, 'coneOuterAngle')}
             unit="°"
-            disabled={multiEdit}
           />
-          {/* @ts-ignore */}
           <InputGroup
             name="Cone Outer Gain"
             label={t('editor:properties.audio.lbl-coreOuterGain')}
@@ -198,8 +144,8 @@ export function AudioSourceProperties({ node, editor, multiEdit }) {
               min={0}
               max={1}
               step={0.01}
-              value={node.coneOuterGain}
-              onChange={onChangeConeOuterGain}
+              value={audioComponent.coneOuterGain}
+              onChange={updateProperty(AudioComponent, 'coneOuterGain')}
             />
           </InputGroup>
         </>
@@ -208,9 +154,4 @@ export function AudioSourceProperties({ node, editor, multiEdit }) {
   )
 }
 
-AudioSourceProperties.propTypes = {
-  node: PropTypes.object,
-  editor: PropTypes.object,
-  multiEdit: PropTypes.bool
-}
 export default AudioSourceProperties

@@ -1,7 +1,3 @@
-import PropTypes from 'prop-types'
-import React, { Component } from 'react'
-import { withTranslation } from 'react-i18next'
-import styled from 'styled-components'
 import { Button, MediumButton } from '../inputs/Button'
 import { connectMenu, ContextMenu, MenuItem } from '../layout/ContextMenu'
 import {
@@ -13,196 +9,184 @@ import {
   ProjectGridHeaderRow
 } from './ProjectGrid'
 import templates from './templates'
-
-/**
- *
- * @author Robert Long
- */
-export const ProjectsSection = (styled as any).section`
-  padding-bottom: 100px;
-  display: flex;
-  flex: ${(props) => (props.flex === undefined ? 1 : props.flex)};
-
-  &:first-child {
-    padding-top: 100px;
-  }
-
-  h1 {
-    font-size: 36px;
-  }
-
-  h2 {
-    font-size: 16px;
-  }
-`
-
-/**
- *
- * @author Robert Long
- */
-export const ProjectsContainer = (styled as any).div`
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  margin: 0 auto;
-  max-width: 1200px;
-  padding: 0 20px;
-`
-
-/**
- *
- * @author Robert Long
- */
-const WelcomeContainer = (styled as any)(ProjectsContainer)`
-  align-items: center;
-
-  & > * {
-    text-align: center;
-  }
-
-  & > *:not(:first-child) {
-    margin-top: 20px;
-  }
-
-  h2 {
-    max-width: 480px;
-  }
-`
-
-/**
- *
- * @author Robert Long
- */
-export const ProjectsHeader = (styled as any).div`
-  margin-bottom: 36px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-`
+import React, { useEffect, useState, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
+import { withRouter } from 'react-router-dom'
+import { StyledProjectsContainer, StyledProjectsSection, WelcomeContainer } from '../../pages/projectUtility'
+import { useAuthState } from '@xrengine/client-core/src/user/services/AuthService'
+import { getProjects } from '../../functions/projectFunctions'
+import { CreateProjectModal } from './CreateProjectModal'
+import { ProjectService } from '@xrengine/client-core/src/common/services/ProjectService'
+import { useDispatch } from '@xrengine/client-core/src/store'
+import { EditorAction } from '../../services/EditorServices'
+import { ProjectInterface } from '@xrengine/common/src/interfaces/ProjectInterface'
 
 const contextMenuId = 'project-menu'
 
-/**
- *
- * @author Robert Long
- */
-class ProjectsPage extends Component<{ t: Function }> {
-  static propTypes = {
-    history: PropTypes.object.isRequired
+const ProjectsPage = (props) => {
+  const [projects, setProjects] = useState<ProjectInterface[]>([] as ProjectInterface[]) // constant projects initialized with an empty array.
+  const [loading, setLoading] = useState(false) // constant loading initialized with false.
+  const [error, setError] = useState(null) // constant error initialized with null.
+  const unmounted = useRef(false)
+
+  const authState = useAuthState()
+  const authUser = authState.authUser // authUser initialized by getting property from authState object.
+  const user = authState.user // user initialized by getting value from authState object.
+
+  const { t } = useTranslation()
+  const [createProjectsModalOpen, setCreateProjectsModalOpen] = useState(false)
+  const dispatch = useDispatch()
+
+  const fetchItems = async () => {
+    setLoading(true)
+    try {
+      const data = await getProjects()
+      if (unmounted.current) return
+
+      console.log(data)
+      setProjects(data ?? [])
+      setLoading(false)
+    } catch (error) {
+      if (unmounted.current) return
+
+      console.error(error)
+      setError(error)
+    }
+    setLoading(false)
   }
 
-  constructor(props) {
-    super(props)
+  useEffect(() => {
+    if (authUser?.accessToken.value != null && authUser.accessToken.value.length > 0 && user?.id.value != null) {
+      fetchItems()
+    }
 
-    this.state = {
-      projects: [],
-      loading: true,
-      error: null
+    return () => {
+      unmounted.current = true
+    }
+  }, [authUser.accessToken.value])
+
+  useEffect(() => {
+    const locationSceneName = props?.match?.params?.sceneName
+    const locationProjectName = props?.match?.params?.projectName
+
+    locationProjectName && dispatch(EditorAction.projectLoaded(locationProjectName))
+    locationSceneName && dispatch(EditorAction.sceneLoaded(locationSceneName))
+  }, [])
+
+  /**
+   *function to delete project
+   */
+  const onDeleteScene = async (scene) => {
+    try {
+      // TODO
+    } catch (error) {
+      console.log(`Error deleting scene ${error}`)
     }
   }
 
-  componentDidMount() {
-    // We dont need to load projects if the user isn't logged in
-    getProjects()
-      .then((projects) => {
-        this.setState({
-          projects: projects.map((project) => ({
-            ...project,
-            url: `/editor/projects/${project.project_id}`
-          })),
-          loading: false
-        })
-      })
-      .catch((error) => {
-        console.error(error)
+  const openTutorial = () => {}
 
-        if (error.response && error.response.status === 401) {
-          // User has an invalid auth token. Prompt them to login again.
-          return (this.props as any).history.push('/', { from: '/editor/projects' })
-        }
-
-        this.setState({ error, loading: false })
-      })
+  /**
+   *function to adding a route to the router object.
+   */
+  const onClickNew = () => {
+    setCreateProjectsModalOpen(true)
   }
 
-  onDeleteProject = (project) => {
-    deleteProject(project.project_id)
-      .then(() =>
-        this.setState({ projects: (this.state as any).projects.filter((p) => p.project_id !== project.project_id) })
-      )
-      .catch((error) => this.setState({ error }))
+  const onClickExisting = (project) => {
+    dispatch(EditorAction.sceneLoaded(null))
+    dispatch(EditorAction.projectLoaded(project.name))
+    props.history.push(`/editor/${project.name}`)
   }
 
-  renderContextMenu = (props) => {
+  const onCreateProject = async (name) => {
+    console.log('onCreateProject', name)
+    await ProjectService.createProject(name)
+    fetchItems()
+  }
+
+  /**
+   *function to render the ContextMenu component with MenuItem component delete.
+   */
+  const renderContextMenu = (props) => {
     return (
-      /* @ts-ignore */
-      <ContextMenu id={contextMenuId}>
-        {/* @ts-ignore */}
-        <MenuItem onClick={(e) => this.onDeleteProject(props.trigger.project, e)}>Delete Project</MenuItem>
-      </ContextMenu>
+      <>
+        <ContextMenu id={contextMenuId}>
+          <MenuItem onClick={(e) => onDeleteScene(props.trigger.scene)}>
+            {t('editor.projects.contextMenu.deleteProject')}
+          </MenuItem>
+        </ContextMenu>
+      </>
     )
   }
 
-  ProjectContextMenu = connectMenu(contextMenuId)(this.renderContextMenu)
+  /**
+   *Calling a functional component connectMenu for creating ProjectContextMenu.
+   *
+   */
+  const ProjectContextMenu = connectMenu(contextMenuId)(renderContextMenu)
 
-  render() {
-    const { error, loading, projects, isAuthenticated } = this.state as any
+  // Declaring an array
+  const topTemplates = [] as any[]
 
-    const ProjectContextMenu = this.ProjectContextMenu
+  // Adding first four templates of tamplates array to topTemplate array.
+  for (let i = 0; i < templates.length && i < 4; i++) {
+    topTemplates.push(templates[i])
+  }
 
-    const topTemplates = []
-
-    for (let i = 0; i < templates.length && i < 4; i++) {
-      topTemplates.push(templates[i])
-    }
-
-    return (
-      <>
+  /**
+   * Rendering view for projects page, if user is not login yet then showing login view.
+   * if user is loged in and has no existing projects then we showing welcome view, providing link for the tutorials.
+   * if user has existing projects then we show the existing projects in grids and a grid to add new project.
+   *
+   */
+  return (
+    <>
+      {authUser?.accessToken.value != null && authUser.accessToken.value.length > 0 && user?.id.value != null && (
         <main>
-          {!isAuthenticated || (projects.length === 0 && !loading) ? (
-            <ProjectsSection flex={0}>
+          {projects.length < 2 && !loading ? (
+            <StyledProjectsSection flex={0}>
               <WelcomeContainer>
-                <h1>{this.props.t('editor:projects.page.header')}</h1>
-                <h2>{this.props.t('editor:projects.page.headerMsg')}</h2>
-                <MediumButton as="a" href="/projects/tutorial">
-                  {this.props.t('editor:projects.page.lbl-startTutorial')}
-                </MediumButton>
+                <h1>{t('editor.projects.welcomeMsg')}</h1>
+                <h2>{t('editor.projects.description')}</h2>
+                <MediumButton onClick={openTutorial}>{t('editor.projects.lbl-startTutorial')}</MediumButton>
               </WelcomeContainer>
-            </ProjectsSection>
+            </StyledProjectsSection>
           ) : null}
-          <ProjectsSection>
-            <ProjectsContainer>
-              <ProjectsHeader>
-                <h1>{this.props.t('editor:projects.page.projects')}</h1>
-              </ProjectsHeader>
+          <StyledProjectsSection>
+            <StyledProjectsContainer>
               <ProjectGridContainer>
                 <ProjectGridHeader>
                   <ProjectGridHeaderRow />
                   <ProjectGridHeaderRow>
-                    <Button as="a" href="/editor/create">
-                      {this.props.t('editor:projects.page.lbl-newProject')}
-                    </Button>
+                    <Button onClick={onClickNew}>{t(`editor.projects.lbl-newProject`)}</Button>
                   </ProjectGridHeaderRow>
                 </ProjectGridHeader>
                 <ProjectGridContent>
-                  {error && <ErrorMessage>{error.message}</ErrorMessage>}
+                  {error && <ErrorMessage>{(error as any).message}</ErrorMessage>}
                   {!error && (
                     <ProjectGrid
                       loading={loading}
                       projects={projects}
-                      newProjectPath="/editor/projects/templates"
-                      contextMenuId={contextMenuId}
+                      onClickExisting={onClickExisting}
+                      onClickNew={onClickNew}
+                      newProjectLabel={t(`editor.projects.lbl-newProject`)}
                     />
                   )}
                 </ProjectGridContent>
               </ProjectGridContainer>
-            </ProjectsContainer>
-          </ProjectsSection>
+            </StyledProjectsContainer>
+          </StyledProjectsSection>
           <ProjectContextMenu />
+          <CreateProjectModal
+            createProject={onCreateProject}
+            open={createProjectsModalOpen}
+            handleClose={() => setCreateProjectsModalOpen(false)}
+          />
         </main>
-      </>
-    )
-  }
+      )}
+    </>
+  )
 }
 
-export default withTranslation()(ProjectsPage)
+export default withRouter(ProjectsPage)

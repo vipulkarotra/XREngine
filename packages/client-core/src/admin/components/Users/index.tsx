@@ -1,13 +1,18 @@
+import Button from '@mui/material/Button'
+import Checkbox from '@mui/material/Checkbox'
+import FormControlLabel from '@mui/material/FormControlLabel'
+import Grid from '@mui/material/Grid'
 import React from 'react'
-import Grid from '@material-ui/core/Grid'
-import Button from '@material-ui/core/Button'
+import Search from '../../common/Search'
+import { UserService } from '../../services/UserService'
+import styles from '../Admin.module.scss'
 import UserModel from './CreateUser'
+import { useUserStyles } from './styles'
 import UserTable from './UserTable'
-import SearchUser from './SearchUser'
-import { useStyles } from './styles'
 
 const Users = () => {
-  const classes = useStyles()
+  const classes = useUserStyles()
+  const [search, setSearch] = React.useState('')
   const [userModalOpen, setUserModalOpen] = React.useState(false)
 
   const openModalCreate = (open: boolean) => (event: React.KeyboardEvent | React.MouseEvent) => {
@@ -25,20 +30,42 @@ const Users = () => {
     setUserModalOpen(open)
   }
 
+  const handleSkipGuests = (e: any) => {
+    UserService.setSkipGuests(e.target.checked)
+  }
+
+  const handleChange = (e: any) => {
+    setSearch(e.target.value)
+  }
+
   return (
     <div>
-      <Grid container spacing={3} className={classes.marginBottom}>
-        <Grid item xs={9}>
-          <SearchUser />
+      <Grid container spacing={1} className={classes.marginBottom}>
+        <Grid item md={8} xs={6}>
+          <Search text="user" handleChange={handleChange} />
         </Grid>
-        <Grid item xs={3}>
+        <Grid item md={1} xs={1}>
+          <FormControlLabel
+            className={styles.checkbox}
+            control={
+              <Checkbox
+                onChange={(e) => handleSkipGuests(e)}
+                name="stereoscopic"
+                className={styles.checkbox}
+                color="primary"
+              />
+            }
+            label="Hide guests"
+          />
+        </Grid>
+        <Grid item md={3} xs={5}>
           <Button className={classes.createBtn} type="submit" variant="contained" onClick={openModalCreate(true)}>
             Create New User
           </Button>
         </Grid>
       </Grid>
       <div className={classes.rootTable}>
-        <UserTable />
+        <UserTable search={search} />
       </div>
 
       <UserModel open={userModalOpen} handleClose={openModalCreate} closeViewModel={closeViewModel} />

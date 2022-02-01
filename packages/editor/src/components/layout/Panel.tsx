@@ -1,6 +1,23 @@
-import React, { Component } from 'react'
+import React from 'react'
 import styled from 'styled-components'
-import PropTypes from 'prop-types'
+
+/**
+ *
+ *  @author Robert Long
+ */
+export const PanelIcon = (styled as any).div`
+ color: #b6b6b6;
+ margin-right: 8px;
+`
+
+/**
+ *
+ *  @author Robert Long
+ */
+export const PanelTitle = (styled as any).div`
+ color: #b6b6b6;
+ position: relative
+`
 
 /**
  *
@@ -11,6 +28,17 @@ export const PanelDragContainer = (styled as any).div`
   flex: 1;
   flex-direction: row;
   align-items: center;
+
+  &.dock-tab-active {
+
+    ${PanelTitle} {
+      color: white !important;
+    }
+
+    ${PanelIcon} {
+      color: white !important;
+    }
+  }
 `
 
 /**
@@ -43,20 +71,6 @@ export const PanelToolbar = (styled as any).div`
  *
  *  @author Robert Long
  */
-export const PanelIcon = (styled as any).div`
-  margin-right: 8px;
-`
-
-/**
- *
- *  @author Robert Long
- */
-export const PanelTitle = (styled as any).div``
-
-/**
- *
- *  @author Robert Long
- */
 export const PanelContent = (styled as any).div`
   display: flex;
   flex: 1;
@@ -69,28 +83,19 @@ export const PanelContent = (styled as any).div`
  *
  *  @author Robert Long
  */
-export class Panel extends Component {
-  static propTypes = {
-    icon: PropTypes.object,
-    title: PropTypes.string,
-    children: PropTypes.node,
-    toolbarContent: PropTypes.node
-  }
+export const Panel = (props) => {
+  const { icon, title, children, toolbarContent, ...rest } = props
 
-  render() {
-    const { icon, title, children, toolbarContent, ...rest } = this.props as any
-
-    return (
-      <PanelContainer {...rest}>
-        <PanelToolbar className="toolbar">
-          {icon && <PanelIcon as={icon} size={12} />}
-          <PanelTitle>{title}</PanelTitle>
-          {toolbarContent}
-        </PanelToolbar>
-        <PanelContent>{children}</PanelContent>
-      </PanelContainer>
-    )
-  }
+  return (
+    <PanelContainer {...rest}>
+      <PanelToolbar className="toolbar">
+        {icon && <PanelIcon as={icon} size={12} />}
+        <PanelTitle>{title}</PanelTitle>
+        {toolbarContent}
+      </PanelToolbar>
+      <PanelContent>{children}</PanelContent>
+    </PanelContainer>
+  )
 }
 
 export default Panel

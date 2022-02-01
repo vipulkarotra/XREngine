@@ -1,31 +1,23 @@
 import React from 'react'
-import Grid from '@material-ui/core/Grid'
-import Divider from '@material-ui/core/Divider'
-import Typography from '@material-ui/core/Typography'
-import { connect } from 'react-redux'
+import Grid from '@mui/material/Grid'
+import Divider from '@mui/material/Divider'
+import Typography from '@mui/material/Typography'
+
 import SingleConnection from './SingleConnection'
 import { User } from '@xrengine/common/src/interfaces/User'
 import styles from './ProfileConnections.module.scss'
-import { selectAuthState } from '../../reducers/auth/selector'
 import { useTranslation } from 'react-i18next'
+import { useAuthState } from '../../services/AuthService'
 
 interface Props {
   auth: any
   classes: any
 }
 
-const mapStateToProps = (state: any): any => {
-  return {
-    auth: selectAuthState(state)
-  }
-}
-
-const mapDispatchToProps = (): any => ({})
-
 const ProfileConnections = (props: Props): any => {
   const { classes } = props
   const { t } = useTranslation()
-  const user = props.auth.get('user') as User
+  const user = useAuthState().user.value
 
   if (!user) {
     // window.location.href = '/'
@@ -62,4 +54,4 @@ const ProfileConnections = (props: Props): any => {
 
 const ProfileConnectionsWrapper = (props: any): any => <ProfileConnections {...props} />
 
-export default connect(mapStateToProps, mapDispatchToProps)(ProfileConnectionsWrapper)
+export default ProfileConnectionsWrapper

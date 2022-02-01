@@ -1,80 +1,57 @@
-import React, { Component } from 'react'
-import PropTypes from 'prop-types'
-import NodeEditor from '@xrengine/editor/src/components/properties/NodeEditor'
-import InputGroup from '@xrengine/editor/src/components/inputs/InputGroup'
-import ImageInput from '@xrengine/editor/src/components/inputs/ImageInput'
-import Vector2Input from '@xrengine/editor/src/components/inputs/Vector2Input'
-import { City } from '@styled-icons/fa-solid/City'
-import i18n from 'i18next'
-import { withTranslation } from 'react-i18next'
+import React from 'react'
+import NodeEditor from './NodeEditor'
+import InputGroup from '../inputs/InputGroup'
+import ImageInput from '../inputs/ImageInput'
+import Vector2Input from '../inputs/Vector2Input'
+import { useTranslation } from 'react-i18next'
 import NumericInputGroup from '../inputs/NumericInputGroup'
-
-//declaring properties for InteriorNodeEditor
-type InteriorNodeEditorProps = {
-  editor: any
-  node: any
-  t: Function
-}
+import LocationCityIcon from '@mui/icons-material/LocationCity'
+import { EditorComponentType, updateProperty } from './Util'
+import { getComponent, hasComponent } from '@xrengine/engine/src/ecs/functions/ComponentFunctions'
+import { InteriorComponent } from '@xrengine/engine/src/scene/components/InteriorComponent'
+import { useEngineState } from '@xrengine/engine/src/ecs/classes/EngineService'
+import { ErrorComponent } from '@xrengine/engine/src/scene/components/ErrorComponent'
 
 /**
- * InteriorNodeEditor provides the editor to customize properties.
+ * Interior Editor provides the editor to customize properties.
  *
  * @author Robert Long
  * @type {class component}
  */
-export class InteriorNodeEditor extends Component<InteriorNodeEditorProps> {
-  // declaring propTypes for InteriorNodeEditor
-  static propTypes = {
-    editor: PropTypes.object,
-    node: PropTypes.object
-  }
+export const InteriorNodeEditor: EditorComponentType = (props) => {
+  const { t } = useTranslation()
+  const engineState = useEngineState()
+  const entity = props.node.entity
+  const interiorComponent = getComponent(entity, InteriorComponent)
+  const hasError = engineState.errorEntities[entity].get() || hasComponent(entity, ErrorComponent)
 
-  constructor(props: InteriorNodeEditorProps) {
-    super(props)
-    this.props = props
-  }
-
-  //setting iconComponent name
-  static iconComponent = City
-
-  //setting description and will appears on editor view
-  static description = i18n.t('editor:properties.interior.description')
-
-  declare props: InteriorNodeEditorProps
-
-  onChangeProperty = (name: string) => {
-    return (value) => {
-      this.props.editor.setPropertySelected(name, value)
-    }
-  }
-
-  //rendering view
-  render() {
-    InteriorNodeEditor.description = this.props.t('editor:properties.interior.description')
-    return (
-      <NodeEditor {...this.props} description={InteriorNodeEditor.description}>
-        {/* @ts-ignore */}
-        <InputGroup name="Cube Map" label={this.props.t('editor:properties.interior.lbl-cubeMap')}>
-          <ImageInput value={this.props.node.cubeMap} onChange={this.onChangeProperty('cubeMap')} />
-        </InputGroup>
-        {/* @ts-ignore */}
-        <InputGroup name="Size" label={this.props.t('editor:properties.interior.lbl-size')}>
-          <Vector2Input value={this.props.node.size} onChange={this.onChangeProperty('size')} />
-        </InputGroup>
-        {/* @ts-ignore */}
-        <NumericInputGroup
-          name="Tiling"
-          label={this.props.t('editor:properties.interior.lbl-tiling')}
-          min={1}
-          smallStep={1.0}
-          mediumStep={1.0}
-          largeStep={2.0}
-          value={this.props.node.tiling}
-          onChange={this.onChangeProperty('tiling')}
-        />
-      </NodeEditor>
-    )
-  }
+  return (
+    <NodeEditor
+      {...props}
+      name={t('editor:properties.interior.name')}
+      description={t('editor:properties.interior.description')}
+    >
+      <InputGroup name="Cube Map" label={t('editor:properties.interior.lbl-cubeMap')}>
+        <ImageInput value={interiorComponent.cubeMap} onChange={updateProperty(InteriorComponent, 'cubeMap')} />
+        {hasError && <div style={{ marginTop: 2, color: '#FF8C00' }}>{t('editor:properties.interior.error-url')}</div>}
+      </InputGroup>
+      <InputGroup name="Size" label={t('editor:properties.interior.lbl-size')}>
+        <Vector2Input value={interiorComponent.size} onChange={updateProperty(InteriorComponent, 'size')} />
+      </InputGroup>
+      <NumericInputGroup
+        name="Tiling"
+        label={t('editor:properties.interior.lbl-tiling')}
+        min={1}
+        smallStep={1.0}
+        mediumStep={1.0}
+        largeStep={2.0}
+        value={interiorComponent.tiling}
+        onChange={updateProperty(InteriorComponent, 'tiling')}
+      />
+    </NodeEditor>
+  )
 }
 
-export default withTranslation()(InteriorNodeEditor)
+InteriorNodeEditor.iconComponent = LocationCityIcon
+
+export default InteriorNodeEditor

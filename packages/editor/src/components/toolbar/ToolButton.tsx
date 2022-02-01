@@ -1,5 +1,4 @@
 import React from 'react'
-import PropTypes from 'prop-types'
 import styled from 'styled-components'
 import { InfoTooltip } from '../layout/Tooltip'
 
@@ -18,19 +17,29 @@ const StyledToolButton = (styled as any).button`
   background-color: ${(props) => (props.isSelected ? props.theme.blue : props.theme.toolbar)};
 
   &:hover {
-    background-color: ${(props) => (props.isSelected ? props.theme.blueHover : props.theme.panel2)};
+    background-color: ${(props) => (props.isSelected ? props.theme.blueHover : props.theme.panel)};
   }
 `
 
 /**
  *
  * @author Robert Long
+ * @author Abhishek Pathak
  */
 const Icon = (styled as any).div`
-  width: 14px;
-  height: 14px;
+  width: '100%';
+  height: '100%';
   font-size: 14px;
+  align-items: center;
 `
+
+interface ToolButtonProp {
+  id: string | number
+  icon?: any
+  onClick: Function
+  isSelected?: boolean
+  tooltip?: string
+}
 
 /**
  *
@@ -42,7 +51,7 @@ const Icon = (styled as any).div`
  * @param {any} tooltip
  * @returns
  */
-export function ToolButton({ id, icon, onClick, isSelected, tooltip }) {
+export function ToolButton({ id, icon, onClick, isSelected, tooltip }: ToolButtonProp) {
   return (
     <InfoTooltip id={id} info={tooltip} position="bottom">
       <StyledToolButton isSelected={isSelected} onClick={onClick}>
@@ -52,15 +61,4 @@ export function ToolButton({ id, icon, onClick, isSelected, tooltip }) {
   )
 }
 
-/**
- *
- * @author Robert Long
- */
-ToolButton.propTypes = {
-  id: PropTypes.string,
-  icon: PropTypes.object,
-  onClick: PropTypes.func,
-  isSelected: PropTypes.bool,
-  tooltip: PropTypes.string
-}
 export default ToolButton

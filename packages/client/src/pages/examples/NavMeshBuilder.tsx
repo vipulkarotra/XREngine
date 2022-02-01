@@ -1,18 +1,22 @@
-import { Timer } from '@xrengine/engine/src/common/functions/Timer'
 import { Engine } from '@xrengine/engine/src/ecs/classes/Engine'
+import { Entity } from '@xrengine/engine/src/ecs/classes/Entity'
+import { World } from '@xrengine/engine/src/ecs/classes/World'
 import {
   addComponent,
-  createEntity,
   createMappedComponent,
   getComponent
-} from '@xrengine/engine/src/ecs/functions/EntityFunctions'
-import { createPipeline, registerSystem } from '@xrengine/engine/src/ecs/functions/SystemFunctions'
+} from '@xrengine/engine/src/ecs/functions/ComponentFunctions'
+import { createEntity } from '@xrengine/engine/src/ecs/functions/EntityFunctions'
+import { initSystems } from '@xrengine/engine/src/ecs/functions/SystemFunctions'
+import { useWorld } from '@xrengine/engine/src/ecs/functions/SystemHooks'
 import { SystemUpdateType } from '@xrengine/engine/src/ecs/functions/SystemUpdateType'
+import { createEngine } from '@xrengine/engine/src/initializeEngine'
 import { OrbitControls } from '@xrengine/engine/src/input/functions/OrbitControls'
 import { createCellSpaceHelper } from '@xrengine/engine/src/navigation/CellSpacePartitioningHelper'
 import { CustomVehicle } from '@xrengine/engine/src/navigation/CustomVehicle'
 import { createConvexRegionHelper } from '@xrengine/engine/src/navigation/NavMeshHelper'
 import { PathPlanner } from '@xrengine/engine/src/navigation/PathPlanner'
+import { defineQuery } from 'bitecs'
 import React, { useEffect } from 'react'
 import {
   AmbientLight,
@@ -28,15 +32,7 @@ import {
   Scene,
   WebGLRenderer
 } from 'three'
-import { CellSpacePartitioning, EntityManager, FollowPathBehavior, NavMeshLoader, Time } from 'yuka'
-import { defineQuery, defineSystem, System, Types } from 'bitecs'
-import { AnimationClip, AnimationMixer } from 'three'
-import { ECSWorld, World } from '@xrengine/engine/src/ecs/classes/World'
-import { NavMeshBuilder } from '@xrengine/engine/src/map/NavMeshBuilder'
-import { fetchVectorTiles } from '@xrengine/engine/src/map/MapBoxClient'
-import { Position, Polygon, MultiPolygon } from 'geojson'
-import pc from 'polygon-clipping'
-import { computeBoundingBox } from '@xrengine/engine/src/map/GeoJSONFns'
+import { CellSpacePartitioning, EntityManager, FollowPathBehavior, Time } from 'yuka'
 
 type NavigationComponentType = {
   pathPlanner: PathPlanner
@@ -49,13 +45,13 @@ type NavigationComponentType = {
   navigationMesh
 }
 
-const NavigationComponent = createMappedComponent<NavigationComponentType>()
+const NavigationComponent = createMappedComponent<NavigationComponentType>('NavigationComponent')
 
-const RenderSystem = async (): Promise<System> => {
-  return defineSystem((world: ECSWorld) => {
+const RenderSystem = async (world: World) => {
+  return () => {
     Engine.renderer.render(Engine.scene, Engine.camera)
     return world
-  })
+  }
 }
 
 const pathMaterial = new LineBasicMaterial({ color: 0xff0000 })
@@ -75,42 +71,21 @@ const cellsX = 100,
   cellsY = 1,
   cellsZ = 100
 
-function scaleAndTranslatePosition(position: Position, llCenter: Position) {
-  return [(position[0] - llCenter[0]) * 1000, (position[1] - llCenter[1]) * 1000]
-}
-
-function scaleAndTranslatePolygon(coords: Position[][], llCenter: Position) {
-  return [coords[0].map((position) => scaleAndTranslatePosition(position, llCenter))]
-}
-function scaleAndTranslate(geometry: Polygon | MultiPolygon, llCenter: Position) {
-  switch (geometry.type) {
-    case 'MultiPolygon':
-      geometry.coordinates = geometry.coordinates.map((coords) => scaleAndTranslatePolygon(coords, llCenter))
-      break
-    case 'Polygon':
-      geometry.coordinates = scaleAndTranslatePolygon(geometry.coordinates, llCenter)
-      break
-  }
-
-  return geometry
-}
-
 const loadNavMeshFromMapBox = async (navigationComponent) => {
-  const builder = new NavMeshBuilder()
-  const center = [-84.388, 33.749] as Position
-  const tiles = await fetchVectorTiles(center)
-  const gBuildings = tiles
-    .reduce((acc, tiles) => acc.concat(tiles.building), [])
-    .map((feature) => scaleAndTranslate(feature.geometry as Polygon | MultiPolygon, center as any))
-
-  const gGround = computeBoundingBox(gBuildings)
-  let gBuildingNegativeSpace = [gGround.coordinates]
-  gBuildings.forEach((gPositiveSpace) => {
-    gBuildingNegativeSpace = pc.difference(gBuildingNegativeSpace as any, gPositiveSpace.coordinates as any)
-  })
-  builder.addGeometry({ type: 'MultiPolygon', coordinates: gBuildingNegativeSpace })
-  const navigationMesh = builder.build()
-  loadNavMesh(navigationMesh, navigationComponent)
+  // const builder = new NavMeshBuilder()
+  // const center = [-84.388, 33.749] as Position
+  // const tiles = await fetchVectorTiles(center)
+  // const gBuildings = tiles
+  //   .reduce((acc, tiles) => acc.concat(tiles.building), [])
+  //   .map((feature) => scaleAndTranslate(feature.geometry as Polygon | MultiPolygon, center as any))
+  // const gGround = computeBoundingBox(gBuildings)
+  // let gBuildingNegativeSpace = [gGround.coordinates]
+  // gBuildings.forEach((gPositiveSpace) => {
+  //   gBuildingNegativeSpace = pc.difference(gBuildingNegativeSpace as any, gPositiveSpace.coordinates as any)
+  // })
+  // builder.addGeometry({ type: 'MultiPolygon', coordinates: gBuildingNegativeSpace })
+  // const navigationMesh = builder.build()
+  // loadNavMesh(navigationMesh, navigationComponent)
 }
 
 const loadNavMesh = async (navigationMesh, navigationComponent) => {
@@ -167,7 +142,7 @@ async function startDemo(entity) {
   }
 }
 
-export const NavigationSystem = async (): Promise<System> => {
+export const NavigationSystem = async (world: World) => {
   const entity = createEntity()
   addComponent(entity, NavigationComponent, {
     pathPlanner: new PathPlanner(),
@@ -183,11 +158,11 @@ export const NavigationSystem = async (): Promise<System> => {
 
   const navigationQuery = defineQuery([NavigationComponent])
 
-  return defineSystem((world: ECSWorld) => {
+  return () => {
     const { delta } = world
 
     for (const entity of navigationQuery(world)) {
-      const navComponent = getComponent(entity, NavigationComponent)
+      const navComponent = getComponent(entity as Entity, NavigationComponent)
 
       navComponent.entityManager.update(delta)
 
@@ -236,42 +211,26 @@ export const NavigationSystem = async (): Promise<System> => {
       vehicleMesh.instanceMatrix.needsUpdate = true
     }
     return world
-  })
+  }
 }
 
 // This is a functional React component
 const Page = () => {
   useEffect(() => {
     ;(async function () {
+      createEngine()
       // Register our systems to do stuff
-
-      registerSystem(SystemUpdateType.Fixed, NavigationSystem)
-      registerSystem(SystemUpdateType.Free, RenderSystem)
-
-      const fixedPipeline = await createPipeline(SystemUpdateType.Fixed)
-      const freePipeline = await createPipeline(SystemUpdateType.Free)
-      const networkPipeline = await createPipeline(SystemUpdateType.Network)
-
-      const executePipeline = (world: World, pipeline) => {
-        return (delta, elapsedTime) => {
-          world.ecsWorld.delta = delta
-          world.ecsWorld.time = elapsedTime
-          pipeline(world.ecsWorld)
-          world.ecsWorld._removedComponents.clear()
-        }
-      }
-
-      const world = World.defaultWorld
-
-      Engine.engineTimer = Timer(
+      await initSystems(useWorld(), [
         {
-          networkUpdate: executePipeline(world, networkPipeline),
-          fixedUpdate: executePipeline(world, fixedPipeline),
-          update: executePipeline(world, freePipeline)
+          type: SystemUpdateType.FIXED,
+          systemModulePromise: Promise.resolve({ default: NavigationSystem })
         },
-        Engine.physicsFrameRate,
-        Engine.networkFramerate
-      )
+        {
+          type: SystemUpdateType.UPDATE,
+          systemModulePromise: Promise.resolve({ default: RenderSystem })
+        }
+      ])
+
       // Set up rendering and basic scene for demo
       const canvas = document.createElement('canvas')
       document.body.appendChild(canvas) // adds the canvas to the body element

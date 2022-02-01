@@ -1,33 +1,14 @@
 import { EmptyLayout } from '@xrengine/client-core/src/common/components/Layout/EmptyLayout'
-import { doLoginAuto } from '@xrengine/client-core/src/user/reducers/auth/service'
-import { selectInstanceConnectionState } from '../reducers/instanceConnection/selector'
-import React, { useEffect } from 'react'
-import { connect } from 'react-redux'
-import { bindActionCreators, Dispatch } from 'redux'
 import ProfileMenu from '@xrengine/client-core/src/user/components/UserMenu/menus/ProfileMenu'
+import { AuthService } from '@xrengine/client-core/src/user/services/AuthService'
+import React, { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
-interface Props {
-  instanceConnectionState?: any
-  doLoginAuto?: any
-}
-
-const mapStateToProps = (state: any): any => {
-  return {
-    instanceConnectionState: selectInstanceConnectionState(state)
-  }
-}
-
-const mapDispatchToProps = (dispatch: Dispatch): any => ({
-  doLoginAuto: bindActionCreators(doLoginAuto, dispatch)
-})
-
-export const IndexPage = (props: Props): any => {
-  const { doLoginAuto } = props
+export const IndexPage = (): any => {
   const { t } = useTranslation()
 
   useEffect(() => {
-    doLoginAuto(true)
+    AuthService.doLoginAuto(true)
   }, [])
 
   // <Button className="right-bottom" variant="contained" color="secondary" aria-label="scene" onClick={(e) => { setSceneVisible(!sceneIsVisible); e.currentTarget.blur(); }}>scene</Button>
@@ -35,17 +16,17 @@ export const IndexPage = (props: Props): any => {
   return (
     <EmptyLayout pageTitle={t('login.pageTitle')}>
       <style>
-        {' '}
         {`
-                [class*=menuPanel] {
-                    top: 75px;
-                    bottom: initial;
-                }
-            `}
+          [class*=menuPanel] {
+              top: 75px;
+              bottom: initial;
+              pointer-events: auto;
+          }
+        `}
       </style>
       <ProfileMenu />
     </EmptyLayout>
   )
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(IndexPage)
+export default IndexPage

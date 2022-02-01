@@ -1,4 +1,3 @@
-import { ServiceAddons } from '@feathersjs/feathers'
 import { Application } from '../../../declarations'
 import { User } from './user.class'
 import createModel from './user.model'
@@ -6,13 +5,14 @@ import hooks from './user.hooks'
 import _ from 'lodash'
 import logger from '../../logger'
 import userDocs from './user.docs'
+import config from '../../appconfig'
 
 declare module '../../../declarations' {
   /**
    * Interface for users input
    */
   interface ServiceTypes {
-    user: User & ServiceAddons<any>
+    user: User
   }
 }
 
@@ -26,11 +26,14 @@ export default (app: Application): void => {
   const event = new User(options, app)
   event.docs = userDocs
 
-  app.use('/user', event)
+  app.use('user', event)
 
   const service = app.service('user')
 
-  service.hooks(hooks as any)
+  service.hooks(hooks)
+
+  // when seeding db, no need to patch users
+  if (config.db.forceRefresh) return
 
   /**
    * This method find all users
@@ -39,17 +42,17 @@ export default (app: Application): void => {
 
   service.publish('patched', async (data, params): Promise<any> => {
     try {
-      const groupUsers = await (app.service('group-user') as any).Model.findAll({
+      const groupUsers = await app.service('group-user').Model.findAll({
         where: {
           userId: data.id
         }
       })
-      const partyUsers = await (app.service('party-user') as any).Model.findAll({
+      const partyUsers = await app.service('party-user').Model.findAll({
         where: {
           userId: data.id
         }
       })
-      const userRelationships = await (app.service('user-relationship') as any).Model.findAll({
+      const userRelationships = await app.service('user-relationship').Model.findAll({
         where: {
           userRelationshipType: 'friend',
           relatedUserId: data.id
@@ -57,11 +60,10 @@ export default (app: Application): void => {
       })
 
       let targetIds = [data.id]
-      const updatePromises = []
+      const updatePromises: any[] = []
 
-      let layerUsers = []
       if (data.instanceId != null || params.params?.instanceId != null) {
-        layerUsers = await (app.service('user') as any).Model.findAll({
+        const layerUsers = await app.service('user').Model.findAll({
           where: {
             instanceId: data.instanceId || params.params?.instanceId
           }
@@ -79,9 +81,13 @@ export default (app: Application): void => {
       })
       partyUsers.forEach((partyUser) => {
         updatePromises.push(
-          app.service('party-user').patch(partyUser.id, {
-            isOwner: partyUser.isOwner
-          })
+          app.service('party-user').patch(
+            partyUser.id,
+            {
+              isOwner: partyUser.isOwner
+            },
+            params
+          )
         )
         targetIds.push(partyUser.userId)
       })

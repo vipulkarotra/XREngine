@@ -3,28 +3,12 @@ import { FollowCameraComponent } from '../../camera/components/FollowCameraCompo
 import { ProjectionType } from '../../camera/types/ProjectionType'
 import { Engine } from '../../ecs/classes/Engine'
 import { Entity } from '../../ecs/classes/Entity'
-import { getComponent } from '../../ecs/functions/EntityFunctions'
-import { CameraMode } from '@xrengine/engine/src/camera/types/CameraMode'
-import { Network } from '../../networking/classes/Network'
+import { getComponent } from '../../ecs/functions/ComponentFunctions'
+import { useWorld } from '../../ecs/functions/SystemHooks'
 import { switchCameraMode } from '../../avatar/functions/switchCameraMode'
+import { CameraPropertiesComponentType } from '../components/CameraPropertiesComponent'
 
-type Props = {
-  projectionType?: ProjectionType
-  fov?: number
-  cameraNearClip?: number
-  cameraFarClip?: number
-  minCameraDistance?: number
-  maxCameraDistance?: number
-  startCameraDistance?: number
-  cameraMode: CameraMode
-  cameraModeDefault: CameraMode
-  startInFreeLook: boolean
-  minPhi: number
-  maxPhi: number
-  startPhi: number
-}
-
-export const setCameraProperties = (entity: Entity, data: Props): void => {
+export const setCameraProperties = (entity: Entity, data: CameraPropertiesComponentType): void => {
   const cameraFollow = getComponent(entity, FollowCameraComponent)
   console.log('data')
 
@@ -52,5 +36,5 @@ export const setCameraProperties = (entity: Entity, data: Props): void => {
   cameraFollow.maxPhi = data.maxPhi
   cameraFollow.locked = !data.startInFreeLook
   Engine.camera.updateProjectionMatrix()
-  switchCameraMode(Network.instance.localClientEntity, data, true)
+  switchCameraMode(useWorld().localClientEntity, data, true)
 }

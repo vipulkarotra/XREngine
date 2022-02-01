@@ -1,12 +1,7 @@
-import { Body } from 'three-physx'
-import { createMappedComponent } from '../../ecs/functions/EntityFunctions'
-
-/**
- * @author HydraFire <github.com/HydraFire>
- */
+import { createMappedComponent } from '../../ecs/functions/ComponentFunctions'
 
 export type ColliderComponentType = {
-  body: Body
+  body: PhysX.PxRigidStatic | PhysX.PxRigidDynamic
 }
 
-export const ColliderComponent = createMappedComponent<ColliderComponentType>()
+export const ColliderComponent = createMappedComponent<ColliderComponentType>('ColliderComponent')

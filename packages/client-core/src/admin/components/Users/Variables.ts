@@ -1,65 +1,66 @@
-export interface Column {
+export interface UserColumn {
   id: 'name' | 'avatar' | 'status' | 'location' | 'inviteCode' | 'instanceId' | 'action'
   label: string
   minWidth?: number
   align?: 'right'
 }
 
-export const columns: Column[] = [
-  { id: 'name', label: 'Name', minWidth: 170 },
-  { id: 'avatar', label: 'Avatar', minWidth: 100 },
+export const userColumns: UserColumn[] = [
+  { id: 'name', label: 'Name', minWidth: 65 },
+  { id: 'avatar', label: 'Avatar', minWidth: 65 },
   {
     id: 'status',
     label: 'Status',
-    minWidth: 170,
+    minWidth: 65,
     align: 'right'
   },
   {
     id: 'location',
     label: 'Location',
-    minWidth: 170,
+    minWidth: 65,
     align: 'right'
   },
   {
     id: 'inviteCode',
     label: 'Invite code',
-    minWidth: 170,
+    minWidth: 65,
     align: 'right'
   },
   {
     id: 'instanceId',
     label: 'Instance',
-    minWidth: 170,
+    minWidth: 65,
     align: 'right'
   },
   {
     id: 'action',
     label: 'Action',
-    minWidth: 170,
+    minWidth: 65,
     align: 'right'
   }
 ]
 
-export interface Data {
+export interface UserData {
   id: string
-  user: any
+  el: any
   name: string
-  avatar: string
-  status: string
-  location: string
-  inviteCode: string
-  instanceId: string
+  avatar: string | JSX.Element
+  status: string | JSX.Element
+  location: string | JSX.Element
+  inviteCode: string | JSX.Element
+  instanceId: string | JSX.Element
   action: any
 }
-export interface Props {
+export interface UserProps {
   removeUserAdmin?: any
   authState?: any
   adminUserState?: any
   fetchUsersAsAdmin?: any
   refetchSingleUserAdmin?: any
+  search: string
 }
 
-export interface TabPanelProps {
+export interface UserTabPanelProps {
   children?: React.ReactNode
   index: any
   value: any

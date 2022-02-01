@@ -1,8 +1,28 @@
 import React from 'react'
-import PropTypes from 'prop-types'
+import Grid from '@mui/material/Grid'
 import { InputGroupContainer, InputGroupContent, InputGroupInfo } from './InputGroup'
 import Scrubber from './Scrubber'
 import NumericInput from './NumericInput'
+
+export interface NumericInputGroupProp {
+  name?: string
+  className?: any
+  info?: any
+  label?: any
+  displayPrecision?: number
+  smallStep?: number
+  mediumStep?: number
+  largeStep?: number
+  min?: number
+  max?: number
+  value?: any
+  onChange: Function
+  unit?: string
+  convertFrom?: any
+  convertTo?: any
+  disabled?: boolean
+  default?: any
+}
 
 /**
  *
@@ -12,26 +32,25 @@ import NumericInput from './NumericInput'
  * @param {any} rest
  * @returns
  */
-export function NumericInputGroup({ name, className, info, label, ...rest }) {
+export function NumericInputGroup({ name, className, info, label, ...rest }: NumericInputGroupProp) {
   const { displayPrecision, ...scrubberProps } = rest
   return (
     <InputGroupContainer>
-      {/* @ts-ignore */}
-      <Scrubber {...scrubberProps}>{label}:</Scrubber>
-      <InputGroupContent>
-        <NumericInput {...rest} />
-        {info && <InputGroupInfo info={info} />}
-      </InputGroupContent>
+      <Grid container spacing={2}>
+        <Grid item xs={4}>
+          <Scrubber style={{ color: '#9FA4B5' }} {...scrubberProps}>
+            {label}:
+          </Scrubber>
+        </Grid>
+        <Grid item xs={8}>
+          <InputGroupContent>
+            <NumericInput {...rest} />
+            {info && <InputGroupInfo info={info} />}
+          </InputGroupContent>
+        </Grid>
+      </Grid>
     </InputGroupContainer>
   )
 }
 
-/**
- * @author Robert Long
- */
-NumericInputGroup.propTypes = {
-  name: PropTypes.string.isRequired,
-  className: PropTypes.string,
-  info: PropTypes.string
-}
 export default NumericInputGroup

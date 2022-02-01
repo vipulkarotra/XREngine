@@ -2,9 +2,8 @@ import { Material, SkinnedMesh } from 'three'
 import { FollowCameraComponent } from '../../camera/components/FollowCameraComponent'
 import { CameraMode } from '../../camera/types/CameraMode'
 import { Entity } from '../../ecs/classes/Entity'
-import { getComponent } from '../../ecs/functions/EntityFunctions'
+import { getComponent } from '../../ecs/functions/ComponentFunctions'
 import { Object3DComponent } from '../../scene/components/Object3DComponent'
-import { AvatarComponent } from '../components/AvatarComponent'
 
 const setVisible = (entity: Entity, visible: boolean): void => {
   const object3DComponent = getComponent(entity, Object3DComponent)
@@ -27,7 +26,7 @@ type SwitchCameraModeProps = {
   pointerLock?: boolean
 }
 
-let changeTimeout = undefined
+let changeTimeout: any = undefined
 export const switchCameraMode = (
   entity: Entity,
   args: SwitchCameraModeProps = { pointerLock: false, cameraMode: CameraMode.ThirdPerson },

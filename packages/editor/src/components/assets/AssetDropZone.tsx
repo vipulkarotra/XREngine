@@ -1,12 +1,10 @@
-import React, { useContext } from 'react'
-import PropTypes from 'prop-types'
+import React from 'react'
 import styled from 'styled-components'
-import { EditorContext } from '../contexts/EditorContext'
 import { useDrop } from 'react-dnd'
-import { ItemTypes } from '../dnd'
+import { ItemTypes } from '../../constants/AssetTypes'
 import useUpload from './useUpload'
-import { CloudUploadAlt } from '@styled-icons/fa-solid/CloudUploadAlt'
 import { useTranslation } from 'react-i18next'
+import CloudUploadIcon from '@mui/icons-material/CloudUpload'
 
 /**
  * DropZoneBackground provides styles for the view port area where we drag and drop objects.
@@ -34,6 +32,11 @@ const DropZoneBackground = (styled as any).div`
   }
 `
 
+interface AssetDropZoneProp {
+  afterUpload?: any
+  uploadOptions?: any
+}
+
 /**
  * AssetDropZone function used to create view port where we can drag and drop objects.
  *
@@ -42,19 +45,19 @@ const DropZoneBackground = (styled as any).div`
  * @param       {any} uploadOptions
  * @constructor
  */
-export function AssetDropZone({ afterUpload, uploadOptions }) {
-  const editor = useContext(EditorContext)
+export function AssetDropZone({ afterUpload }: AssetDropZoneProp) {
   const { t } = useTranslation()
 
-  const onUpload = useUpload(uploadOptions)
+  const onUpload = useUpload()
 
   const [{ canDrop, isOver, isDragging }, onDropTarget] = useDrop({
     accept: [ItemTypes.File],
-    drop(item: any) {
-      onUpload(item.files).then((assets) => {
-        if (assets) {
-          //editor.setSource(editor.defaultUploadSource.id);
+    drop(item: any, monitor) {
+      const dndItem: any = monitor.getItem()
+      const entries = Array.from(dndItem.items).map((item: any) => item.webkitGetAsEntry())
 
+      onUpload(entries).then((assets) => {
+        if (assets) {
           if (afterUpload) {
             afterUpload(assets)
           }
@@ -71,15 +74,10 @@ export function AssetDropZone({ afterUpload, uploadOptions }) {
   //returning dropzone view
   return (
     <DropZoneBackground ref={onDropTarget} isDragging={isDragging} canDrop={canDrop} isOver={isOver}>
-      <CloudUploadAlt size={48} />
+      <CloudUploadIcon fontSize="large" />
       <h3>{t('editor:asset.dropZone.title')}</h3>
     </DropZoneBackground>
   )
 }
 
-//creating propTypes for AssetDropZone
-AssetDropZone.propTypes = {
-  afterUpload: PropTypes.func,
-  uploadOptions: PropTypes.object
-}
 export default AssetDropZone

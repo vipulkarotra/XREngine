@@ -1,17 +1,25 @@
-import { defineQuery, defineSystem, enterQuery, exitQuery, System } from 'bitecs'
-import { Material, Mesh, MeshBasicMaterial, MeshPhongMaterial, MeshStandardMaterial, Object3D, Vector3 } from 'three'
-import { CameraLayers } from '../../camera/constants/CameraLayers'
+import { Material, Mesh, Vector3 } from 'three'
+import { ObjectLayers } from '../constants/ObjectLayers'
 import { Engine } from '../../ecs/classes/Engine'
-import { ECSWorld } from '../../ecs/classes/World'
-import { getComponent } from '../../ecs/functions/EntityFunctions'
-import { beforeMaterialCompile } from '@xrengine/engine/src/scene/classes/BPCEMShader'
-import { Object3DComponent } from '../components/Object3DComponent'
+import { defineQuery, getComponent, removeComponent } from '../../ecs/functions/ComponentFunctions'
+import { Object3DComponent, Object3DWithEntity } from '../components/Object3DComponent'
 import { PersistTagComponent } from '../components/PersistTagComponent'
 import { ShadowComponent } from '../components/ShadowComponent'
 import { VisibleComponent } from '../components/VisibleComponent'
 import { UpdatableComponent } from '../components/UpdatableComponent'
 import { Updatable } from '../interfaces/Updatable'
-import { TransformComponent } from '../../transform/components/TransformComponent'
+import { World } from '../../ecs/classes/World'
+import { generateMeshBVH } from '../functions/bvhWorkerPool'
+import { SimpleMaterialTagComponent } from '../components/SimpleMaterialTagComponent'
+import { useSimpleMaterial, useStandardMaterial } from '../functions/loaders/SimpleMaterialFunctions'
+import { isClient } from '../../common/functions/isClient'
+import { ReplaceObject3DComponent } from '../components/ReplaceObject3DComponent'
+import { Entity } from '../../ecs/classes/Entity'
+import { reparentObject3D } from '../functions/ReparentFunction'
+import { parseGLTFModel } from '../functions/loadGLTFModel'
+import { ModelComponent } from '../components/ModelComponent'
+import { isNode } from '../../common/functions/getEnvironment'
+import { loadDRACODecoder } from '../../assets/loaders/gltf/NodeDracoLoader'
 
 /**
  * @author Josh Field <github.com/HexaField>
@@ -35,100 +43,140 @@ export class SceneOptions {
   boxProjection = false
 }
 
-export const SceneObjectSystem = async (): Promise<System> => {
-  const sceneObjectQuery = defineQuery([Object3DComponent])
-  const sceneObjectAddQuery = enterQuery(sceneObjectQuery)
-  const sceneObjectRemoveQuery = exitQuery(sceneObjectQuery)
+export const processObject3d = (entity: Entity) => {
+  if (!isClient) return
 
-  const persistQuery = defineQuery([Object3DComponent, PersistTagComponent])
-  const persistAddQuery = enterQuery(persistQuery)
+  const object3DComponent = getComponent(entity, Object3DComponent)
+  const shadowComponent = getComponent(entity, ShadowComponent)
 
-  const visibleQuery = defineQuery([Object3DComponent, VisibleComponent])
-  const visibleAddQuery = enterQuery(visibleQuery)
+  object3DComponent.value.traverse((obj: Mesh) => {
+    const material = obj.material as Material
+    if (typeof material !== 'undefined') material.dithering = true
 
-  const updatableQuery = defineQuery([Object3DComponent, UpdatableComponent])
-
-  SceneOptions.instance = new SceneOptions()
-
-  return defineSystem((world: ECSWorld) => {
-    for (const entity of sceneObjectAddQuery(world)) {
-      const object3DComponent = getComponent(entity, Object3DComponent)
-      const shadowComponent = getComponent(entity, ShadowComponent)
-
-      ;(object3DComponent.value as any).entity = entity
-
-      // Add to scene
-      if (!Engine.scene.children.includes(object3DComponent.value)) {
-        Engine.scene.add(object3DComponent.value)
-      } else {
-        console.warn('[Object3DComponent]: Scene object has been added manually.')
-      }
-
-      // Apply material stuff
-      object3DComponent.value.traverse((obj: Mesh) => {
-        const material = obj.material as Material
-        if (typeof material !== 'undefined') material.dithering = true
-
-        if (shadowComponent) {
-          obj.receiveShadow = shadowComponent.receiveShadow
-          obj.castShadow = shadowComponent.castShadow
-        }
-
-        if (Engine.simpleMaterials) {
-          // || Engine.isHMD) {
-          if (obj.material instanceof MeshStandardMaterial) {
-            const prevMaterial = obj.material
-            obj.material = new MeshPhongMaterial()
-            MeshBasicMaterial.prototype.copy.call(obj.material, prevMaterial)
-          }
-        } else {
-          const material = obj.material as Material
-          if (typeof material !== 'undefined') {
-            // BPCEM
-            if (SceneOptions.instance.boxProjection)
-              material.onBeforeCompile = beforeMaterialCompile(
-                SceneOptions.instance.bpcemOptions.bakeScale,
-                SceneOptions.instance.bpcemOptions.bakePositionOffset
-              )
-            ;(material as any).envMapIntensity = SceneOptions.instance.envMapIntensity
-            if (obj.receiveShadow) {
-              Engine.csm?.setupMaterial(obj)
-            }
-          }
-        }
-      })
+    if (shadowComponent) {
+      obj.receiveShadow = shadowComponent.receiveShadow
+      obj.castShadow = shadowComponent.castShadow
     }
 
-    for (const entity of sceneObjectRemoveQuery(world)) {
-      const object3DComponent = getComponent(entity, Object3DComponent, true)
+    if (Engine.simpleMaterials || Engine.isHMD) {
+      useSimpleMaterial(obj)
+    } else {
+      useStandardMaterial(obj)
+    }
+  })
+}
 
-      // Remove from scene
-      if (object3DComponent && Engine.scene.children.includes(object3DComponent.value)) {
-        Engine.scene.remove(object3DComponent.value)
+const sceneObjectQuery = defineQuery([Object3DComponent])
+const objectReplaceQuery = defineQuery([ReplaceObject3DComponent])
+const simpleMaterialsQuery = defineQuery([SimpleMaterialTagComponent])
+const persistQuery = defineQuery([Object3DComponent, PersistTagComponent])
+const visibleQuery = defineQuery([Object3DComponent, VisibleComponent])
+const updatableQuery = defineQuery([Object3DComponent, UpdatableComponent])
+
+export default async function SceneObjectSystem(world: World) {
+  SceneOptions.instance = new SceneOptions()
+
+  if (isNode) {
+    await loadDRACODecoder()
+  }
+
+  return () => {
+    for (const entity of sceneObjectQuery.enter()) {
+      const obj3d = getComponent(entity, Object3DComponent).value as Object3DWithEntity
+      obj3d.entity = entity
+
+      const node = world.entityTree.findNodeFromEid(entity)
+      if (node) {
+        reparentObject3D(node, node.parentNode)
       } else {
-        console.warn('[Object3DComponent]: Scene object has been removed manually.')
+        let found = false
+        Engine.scene.traverse((obj) => {
+          if (obj === obj3d) {
+            found = true
+          }
+        })
+
+        if (!found) Engine.scene.add(obj3d)
       }
+
+      processObject3d(entity)
+    }
+
+    for (const entity of sceneObjectQuery.exit()) {
+      const obj3d = getComponent(entity, Object3DComponent, true).value
+
+      if (!obj3d.parent) console.warn('[Object3DComponent]: Scene object has been removed manually.')
+
+      obj3d.removeFromParent()
+    }
+
+    for (const entity of objectReplaceQuery.enter()) {
+      const obj3d = getComponent(entity, Object3DComponent)
+      const modelComponent = getComponent(entity, ModelComponent)
+      const replacementObj = getComponent(entity, ReplaceObject3DComponent)?.replacement.scene
+
+      if (!obj3d || !replacementObj) continue
+      ;(replacementObj as any).entity = entity
+      replacementObj.parent = obj3d.value.parent
+
+      const parent = obj3d.value.parent!
+      const index = parent.children.indexOf(obj3d.value)
+      parent.children.splice(index, 1, replacementObj)
+
+      obj3d.value.parent = null
+      obj3d.value = replacementObj
+
+      const node = world.entityTree.findNodeFromEid(entity)
+      if (node) {
+        node.children?.forEach((child) => reparentObject3D(child, node))
+      }
+
+      processObject3d(entity)
+      if (modelComponent) parseGLTFModel(entity, modelComponent, obj3d.value)
+      removeComponent(entity, ReplaceObject3DComponent)
     }
 
     // Enable second camera layer for persistant entities for fun portal effects
-    for (const entity of persistAddQuery(world)) {
+    for (const entity of persistQuery.enter()) {
       const object3DComponent = getComponent(entity, Object3DComponent)
       object3DComponent?.value?.traverse((obj) => {
-        obj.layers.enable(CameraLayers.Portal)
+        obj.layers.enable(ObjectLayers.Portal)
       })
     }
 
-    for (const entity of visibleAddQuery(world)) {
-      const obj = getComponent(entity, Object3DComponent)
-      const visibleComponent = getComponent(entity, VisibleComponent)
-      obj.value.visible = visibleComponent.value
+    for (const entity of persistQuery.exit()) {
+      const object3DComponent = getComponent(entity, Object3DComponent)
+      object3DComponent?.value?.traverse((obj) => {
+        obj.layers.disable(ObjectLayers.Portal)
+      })
     }
 
-    for (const entity of updatableQuery(world)) {
-      const obj = getComponent(entity, Object3DComponent)
-      ;(obj.value as unknown as Updatable).update(world.delta)
+    for (const entity of visibleQuery.enter()) {
+      getComponent(entity, Object3DComponent).value.visible = true
     }
 
-    return world
-  })
+    for (const entity of visibleQuery.exit()) {
+      const obj3d = getComponent(entity, Object3DComponent)
+      if (obj3d) obj3d.value.visible = false // On removal of entity Object3DComponent becomes null
+    }
+
+    for (const entity of updatableQuery()) {
+      const obj = getComponent(entity, Object3DComponent)?.value as unknown as Updatable
+      obj?.update(world.fixedDelta)
+    }
+
+    for (const _ of simpleMaterialsQuery.enter()) {
+      Engine.simpleMaterials = true
+      Engine.scene.traverse((obj) => {
+        useSimpleMaterial(obj as Mesh)
+      })
+    }
+
+    for (const _ of simpleMaterialsQuery.exit()) {
+      Engine.simpleMaterials = false
+      Engine.scene.traverse((obj) => {
+        useStandardMaterial(obj as Mesh)
+      })
+    }
+  }
 }

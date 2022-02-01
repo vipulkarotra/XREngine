@@ -1,18 +1,17 @@
+import Button from '@mui/material/Button'
+import Container from '@mui/material/Container'
+import TextField from '@mui/material/TextField'
+import Typography from '@mui/material/Typography'
 import React, { useState } from 'react'
-import Button from '@material-ui/core/Button'
-import TextField from '@material-ui/core/TextField'
-import Typography from '@material-ui/core/Typography'
-import Container from '@material-ui/core/Container'
-
-import styles from './Auth.module.scss'
-import { EmptyLayout } from '../../../common/components/Layout/EmptyLayout'
-import { resetPassword } from '../../reducers/auth/service'
 import { useTranslation } from 'react-i18next'
+import { EmptyLayout } from '../../../common/components/Layout/EmptyLayout'
+import styles from './Auth.module.scss'
 
 interface Props {
   completeAction?: any
-  resetPassword: typeof resetPassword
+  resetPassword: any
   token: string
+  type?: string
 }
 
 export default (props: Props): any => {

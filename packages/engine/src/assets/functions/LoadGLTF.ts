@@ -1,10 +1,9 @@
 import { AmbientLight, AnimationClip, DirectionalLight, Object3D, PointLight, Group, Mesh } from 'three'
 import { isClient } from '../../common/functions/isClient'
 import { Engine } from '../../ecs/classes/Engine'
-import { GLTFRemoveMaterialsExtension } from '../classes/GLTFRemoveMaterialsExtension'
-import { NodeDRACOLoader } from '../loaders/gltf/NodeDracoLoader'
-import { DRACOLoader } from '../loaders/gltf/DRACOLoader'
-import { GLTFLoader } from '../loaders/gltf/GLTFLoader'
+import { generateMeshBVH } from '../../scene/functions/bvhWorkerPool'
+import { GLTF, GLTFLoader, GLTFParser } from '../loaders/gltf/GLTFLoader'
+import { createGLTFLoader } from './createGLTFLoader'
 
 /**
  * Interface for result of the GLTF Asset load.
@@ -15,29 +14,13 @@ export interface LoadGLTFResultInterface {
   json: any
   stats: any
 }
-
-const loader = new GLTFLoader()
-
-if (!isClient) {
-  loader.register((parser) => new GLTFRemoveMaterialsExtension(parser))
-}
-
-const dracoLoader: any = isClient ? new DRACOLoader() : new NodeDRACOLoader()
-
-if (isClient) {
-  dracoLoader.setDecoderPath('/loader_decoders/')
-} else {
-  dracoLoader.getDecoderModule = () => {}
-  dracoLoader.preload = () => {}
-}
-;(loader as any).setDRACOLoader(dracoLoader)
-
-export function getLoader(): any {
+const loader = createGLTFLoader()
+export function getLoader(): GLTFLoader {
   return loader
 }
 
 export function disposeDracoLoaderWorkers(): void {
-  loader.dracoLoader.dispose()
+  loader.dracoLoader?.dispose()
 }
 
 /**
@@ -46,20 +29,15 @@ export function disposeDracoLoaderWorkers(): void {
  * @param url URL of the asset.
  * @returns a promise of {@link LoadGLTFResultInterface}.
  */
-export async function LoadGLTF(url: string): Promise<LoadGLTFResultInterface> {
-  return await new Promise<LoadGLTFResultInterface>((resolve, reject) => {
+export async function LoadGLTF(url: string): Promise<GLTF> {
+  return await new Promise<GLTF>((resolve, reject) => {
     getLoader().load(
       url,
-      (gltf) => {
-        // TODO: Remove me when we add retargeting
-        gltf.scene.traverse((o) => {
-          o.name = o.name.replace('mixamorig', '')
-        })
-
-        loadExtentions(gltf)
-        resolve({ animations: gltf.animations, scene: gltf.scene, json: {}, stats: {} })
+      async (gltf) => {
+        await loadExtensions(gltf)
+        resolve(gltf)
       },
-      null,
+      null!,
       (e) => {
         console.log(e)
         reject(e)
@@ -68,12 +46,25 @@ export async function LoadGLTF(url: string): Promise<LoadGLTFResultInterface> {
   })
 }
 
-export const loadExtentions = (gltf) => {
-  loadLightmaps(gltf.parser)
+export const loadExtensions = async (gltf: GLTF) => {
+  await loadLightmaps(gltf)
   loadLights(gltf)
+  if (isClient) {
+    const bvhTraverse: Promise<void>[] = []
+    gltf.scene.traverse((mesh) => {
+      bvhTraverse.push(generateMeshBVH(mesh))
+    })
+    await Promise.all(bvhTraverse)
+  }
 }
 
-const loadLightmaps = (parser) => {
+const loadLightmaps = async (gltf: GLTF) => {
+  const parser = gltf.parser
+
+  const lightmapRegistry = {}
+
+  const combine = (name, index) => `${name}:${index}`
+
   const loadLightmap = async (materialIndex) => {
     const lightmapDef = parser.json.materials[materialIndex].extensions.MOZ_lightmap
     const [material, lightMap] = await Promise.all([
@@ -83,24 +74,31 @@ const loadLightmaps = (parser) => {
     material.lightMap = lightMap
     material.lightMapIntensity = lightmapDef.intensity !== undefined ? lightmapDef.intensity : 1
     material.needsUpdate = true
+    lightmapRegistry[combine(material.name, lightmapDef.index)] = lightMap
     return lightMap
   }
-  for (let i = 0; i < parser.json.materials?.length; i++) {
-    const materialNode = parser.json.materials[i]
 
-    if (!materialNode.extensions) continue
-
-    if (materialNode.extensions.MOZ_lightmap) {
-      loadLightmap(i)
-    }
+  if (parser.json.materials) {
+    const lightmapPromises = parser.json.materials
+      .map((materialNode, i) => [materialNode, i])
+      .filter((pair) => pair[0].extensions && pair[0].extensions.MOZ_lightmap)
+      .map((pair) => loadLightmap(pair[1]))
+    await Promise.all(lightmapPromises)
   }
+
+  gltf.scene.traverse((obj) => {
+    if (obj.type.toString() == 'Mesh' && obj.material.userData.gltfExtensions?.MOZ_lightmap) {
+      obj.material.lightMap =
+        lightmapRegistry[combine(obj.material.name, obj.material.userData.gltfExtensions.MOZ_lightmap.index)]
+    }
+  })
 }
 
 // this isn't the best solution. instead we should expose the plugin/extension register in GLTFLoader.js
 
 const loadLights = (gltf) => {
   if (gltf.parser.json?.extensions?.MOZ_hubs_components?.MOZ_hubs_components?.version === 3) {
-    const objsToRemove = []
+    const objsToRemove: any[] = []
     gltf.scene.traverse((obj) => {
       if (obj.userData.gltfExtensions && obj.userData.gltfExtensions.MOZ_hubs_components) {
         let replacement
@@ -141,7 +139,7 @@ const _shadow = (light, lightData) => {
 }
 
 const _directional = (obj) => {
-  if (!Engine.csm) return // currently this breaks CSM
+  if (Engine.csm) return // currently this breaks CSM
   const lightData = obj.userData.gltfExtensions.MOZ_hubs_components['directional-light']
   const light = new DirectionalLight(lightData.color, lightData.intensity)
   _shadow(light, lightData)

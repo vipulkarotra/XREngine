@@ -1,11 +1,23 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import Card from './CardNumber'
-import Grid from '@material-ui/core/Grid'
-import { makeStyles, createStyles, Theme } from '@material-ui/core/styles'
-import Paper from '@material-ui/core/Paper'
-import ApiLinks from './ApiLinks'
-import Graph from './Graph'
-import ReactGa from 'react-ga'
+
+import clsx from 'clsx'
+import ToggleButton from '@mui/material/ToggleButton'
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
+import { Theme } from '@mui/material/styles'
+import makeStyles from '@mui/styles/makeStyles'
+import createStyles from '@mui/styles/createStyles'
+import Paper from '@mui/material/Paper'
+import UserGraph from './UserGraph'
+import ActivityGraph from './ActivityGraph'
+import { useAuthState } from '../../../user/services/AuthService'
+import { useAnalyticsState } from '../../services/AnalyticsService'
+import { AnalyticsService } from '../../services/AnalyticsService'
+
+interface Props {
+  adminGroupState?: any
+  fetchAdminGroup?: any
+}
 
 const useStyles = makeStyles((theme: Theme) =>
   createStyles({
@@ -16,287 +28,42 @@ const useStyles = makeStyles((theme: Theme) =>
       padding: theme.spacing(2),
       textAlign: 'center',
       color: theme.palette.text.secondary,
-      height: '40vh'
-      // maxWidth: "1500px"
+      height: '35rem',
+      width: '99.9%',
+      backgroundColor: '#323845'
     },
     mtopp: {
       marginTop: '20px'
+    },
+    btn: {
+      color: 'white',
+      borderColor: 'white',
+      fontSize: '0.875rem',
+      [theme.breakpoints.down('md')]: {
+        fontSize: '0.6rem'
+      }
+    },
+    btnSelected: {
+      color: 'white !important',
+      borderColor: 'white',
+      backgroundColor: '#0000004d !important'
+    },
+    dashboardCardsContainer: {
+      display: 'grid',
+      gridGap: '10px',
+      gridTemplateColumns: '1fr 1fr 1fr 1fr',
+      ['@media (max-width: 900px)']: {
+        gridTemplateColumns: '1fr 1fr 1fr'
+      },
+      ['@media (max-width: 700px)']: {
+        gridTemplateColumns: '1fr 1fr'
+      },
+      ['@media (max-width: 500px)']: {
+        gridTemplateColumns: '1fr'
+      }
     }
   })
 )
-
-const dataTest = [
-  {
-    id: 'japan',
-    color: 'hsl(234, 70%, 50%)',
-    data: [
-      {
-        x: 'plane',
-        y: 91
-      },
-      {
-        x: 'helicopter',
-        y: 82
-      },
-      {
-        x: 'boat',
-        y: 225
-      },
-      {
-        x: 'train',
-        y: 276
-      },
-      {
-        x: 'subway',
-        y: 186
-      },
-      {
-        x: 'bus',
-        y: 146
-      },
-      {
-        x: 'car',
-        y: 163
-      },
-      {
-        x: 'moto',
-        y: 71
-      },
-      {
-        x: 'bicycle',
-        y: 185
-      },
-      {
-        x: 'horse',
-        y: 28
-      },
-      {
-        x: 'skateboard',
-        y: 46
-      },
-      {
-        x: 'others',
-        y: 153
-      }
-    ]
-  },
-  {
-    id: 'france',
-    color: 'hsl(126, 70%, 50%)',
-    data: [
-      {
-        x: 'plane',
-        y: 16
-      },
-      {
-        x: 'helicopter',
-        y: 263
-      },
-      {
-        x: 'boat',
-        y: 58
-      },
-      {
-        x: 'train',
-        y: 176
-      },
-      {
-        x: 'subway',
-        y: 58
-      },
-      {
-        x: 'bus',
-        y: 64
-      },
-      {
-        x: 'car',
-        y: 103
-      },
-      {
-        x: 'moto',
-        y: 133
-      },
-      {
-        x: 'bicycle',
-        y: 265
-      },
-      {
-        x: 'horse',
-        y: 12
-      },
-      {
-        x: 'skateboard',
-        y: 238
-      },
-      {
-        x: 'others',
-        y: 184
-      }
-    ]
-  },
-  {
-    id: 'us',
-    color: 'hsl(140, 70%, 50%)',
-    data: [
-      {
-        x: 'plane',
-        y: 258
-      },
-      {
-        x: 'helicopter',
-        y: 235
-      },
-      {
-        x: 'boat',
-        y: 208
-      },
-      {
-        x: 'train',
-        y: 195
-      },
-      {
-        x: 'subway',
-        y: 214
-      },
-      {
-        x: 'bus',
-        y: 146
-      },
-      {
-        x: 'car',
-        y: 225
-      },
-      {
-        x: 'moto',
-        y: 56
-      },
-      {
-        x: 'bicycle',
-        y: 231
-      },
-      {
-        x: 'horse',
-        y: 18
-      },
-      {
-        x: 'skateboard',
-        y: 240
-      },
-      {
-        x: 'others',
-        y: 31
-      }
-    ]
-  },
-  {
-    id: 'germany',
-    color: 'hsl(161, 70%, 50%)',
-    data: [
-      {
-        x: 'plane',
-        y: 97
-      },
-      {
-        x: 'helicopter',
-        y: 23
-      },
-      {
-        x: 'boat',
-        y: 113
-      },
-      {
-        x: 'train',
-        y: 32
-      },
-      {
-        x: 'subway',
-        y: 79
-      },
-      {
-        x: 'bus',
-        y: 188
-      },
-      {
-        x: 'car',
-        y: 229
-      },
-      {
-        x: 'moto',
-        y: 16
-      },
-      {
-        x: 'bicycle',
-        y: 119
-      },
-      {
-        x: 'horse',
-        y: 101
-      },
-      {
-        x: 'skateboard',
-        y: 227
-      },
-      {
-        x: 'others',
-        y: 250
-      }
-    ]
-  },
-  {
-    id: 'norway',
-    color: 'hsl(85, 70%, 50%)',
-    data: [
-      {
-        x: 'plane',
-        y: 222
-      },
-      {
-        x: 'helicopter',
-        y: 220
-      },
-      {
-        x: 'boat',
-        y: 259
-      },
-      {
-        x: 'train',
-        y: 128
-      },
-      {
-        x: 'subway',
-        y: 62
-      },
-      {
-        x: 'bus',
-        y: 278
-      },
-      {
-        x: 'car',
-        y: 175
-      },
-      {
-        x: 'moto',
-        y: 23
-      },
-      {
-        x: 'bicycle',
-        y: 100
-      },
-      {
-        x: 'horse',
-        y: 268
-      },
-      {
-        x: 'skateboard',
-        y: 27
-      },
-      {
-        x: 'others',
-        y: 114
-      }
-    ]
-  }
-]
 
 /**
  * Function for analytics on admin dashboard
@@ -305,56 +72,183 @@ const dataTest = [
  * @author Kevin KIMENYI <kimenyikevin@gmail.com>
  */
 
-const Analytics = () => {
-  const classes = useStyles()
-  const data = [
+const Analytics = (props: Props) => {
+  const [refetch, setRefetch] = useState(false)
+  const [graphSelector, setGraphSelector] = useState('activity')
+  let isDataAvailable = false
+  const analyticsState = useAnalyticsState()
+
+  const activeLocations = analyticsState.activeLocations.value
+  const activeParties = analyticsState.activeParties.value
+  const activeScenes = analyticsState.activeScenes.value
+  const activeInstances = analyticsState.activeInstances.value
+  const instanceUsers = analyticsState.instanceUsers.value
+  const channelUsers = analyticsState.channelUsers.value
+  const dailyUsers = analyticsState.dailyUsers.value
+  const dailyNewUsers = analyticsState.dailyNewUsers.value
+
+  const isMounted = useRef(false)
+  const fetchTick = () => {
+    setTimeout(() => {
+      if (!isMounted.current) return
+      setRefetch(true)
+      fetchTick()
+    }, 5000)
+  }
+
+  const activityGraphData = [
     {
-      number: '200K',
-      label: 'Parties'
+      name: 'Active Parties',
+      data: activeParties
     },
     {
-      number: '376K',
-      label: 'Active Sessions'
+      name: 'Active Locations',
+      data: activeLocations
     },
     {
-      number: '3456K',
-      label: 'Active Users'
+      name: 'Active Instances',
+      data: activeInstances
     },
     {
-      number: '453K',
-      label: 'Instances'
+      name: 'Active Scenes',
+      data: activeScenes
+    },
+    {
+      name: 'Instance Users',
+      data: instanceUsers
+    },
+    {
+      name: 'Channel Users',
+      data: channelUsers
     }
   ]
 
-  useEffect(() => {
-    ReactGa.initialize('UA-192756414-1', {
-      debug: true,
-      titleCase: false
-    })
+  const userGraphData = [
+    {
+      name: 'Daily Users',
+      data: dailyUsers
+    },
+    {
+      name: 'Daily New Users',
+      data: dailyNewUsers
+    }
+  ]
 
-    ReactGa.pageview('/admin')
+  if (
+    activityGraphData[0].data.length &&
+    activityGraphData[1].data.length &&
+    activityGraphData[2].data.length &&
+    activityGraphData[3].data.length &&
+    activityGraphData[4].data.length &&
+    activityGraphData[5].data.length
+  )
+    isDataAvailable = true
+
+  useEffect(() => {
+    if (refetch === true) {
+      AnalyticsService.fetchActiveParties()
+      AnalyticsService.fetchInstanceUsers()
+      AnalyticsService.fetchChannelUsers()
+      AnalyticsService.fetchActiveLocations()
+      AnalyticsService.fetchActiveScenes()
+      AnalyticsService.fetchActiveInstances()
+      AnalyticsService.fetchDailyUsers()
+      AnalyticsService.fetchDailyNewUsers()
+    }
+    setRefetch(false)
+  }, [refetch])
+
+  const authState = useAuthState()
+
+  useEffect(() => {
+    if (authState.isLoggedIn.value) setRefetch(true)
+  }, [authState.isLoggedIn.value])
+
+  useEffect(() => {
+    isMounted.current = true
+    fetchTick()
+    return () => {
+      isMounted.current = false
+    }
   }, [])
 
+  const classes = useStyles()
+  const data = [
+    {
+      number: activeParties[activeParties.length - 1] ? activeParties[activeParties.length - 1][1] : 0,
+      label: 'Active Parties',
+      color1: '#2c519d',
+      color2: '#31288f'
+    },
+    {
+      number: activeLocations[activeLocations.length - 1] ? activeLocations[activeLocations.length - 1][1] : 0,
+      label: 'Active Locations',
+      color1: '#77b2e9',
+      color2: '#458bcc'
+    },
+    {
+      number: activeScenes[activeScenes.length - 1] ? activeScenes[activeScenes.length - 1][1] : 0,
+      label: 'Active Scenes',
+      color1: '#e3b76c',
+      color2: '#df9b26'
+    },
+    {
+      number: activeInstances[activeInstances.length - 1] ? activeInstances[activeInstances.length - 1][1] : 0,
+      label: 'Active Instances',
+      color1: '#ed7d7e',
+      color2: '#c95859'
+    },
+    {
+      number: dailyUsers[dailyUsers.length - 1] ? dailyUsers[dailyUsers.length - 1][1] : 0,
+      label: 'Users Today',
+      color1: '#53a7cd',
+      color2: '#24779c'
+    },
+    {
+      number: dailyNewUsers[dailyNewUsers.length - 1] ? dailyNewUsers[dailyNewUsers.length - 1][1] : 0,
+      label: 'New Users Today',
+      color1: '#9771d3',
+      color2: '#6945a1'
+    }
+  ]
+
   return (
-    <div>
-      <Grid container spacing={3}>
+    <>
+      <div className={classes.dashboardCardsContainer}>
         {data.map((el) => {
-          return (
-            <Grid item xs={3} key={el.number}>
-              <Card data={el} />
-            </Grid>
-          )
+          return <Card key={el.label} data={el} />
         })}
-      </Grid>
+      </div>
       <div className={classes.mtopp}>
         <Paper className={classes.paper}>
-          <Graph data={dataTest} />
+          <ToggleButtonGroup value={graphSelector} exclusive color="primary" aria-label="outlined primary button group">
+            <ToggleButton
+              className={clsx(classes.btn, {
+                [classes.btnSelected]: graphSelector === 'activity'
+              })}
+              value="activity"
+              onClick={() => setGraphSelector('activity')}
+            >
+              Activity
+            </ToggleButton>
+            <ToggleButton
+              className={clsx(classes.btn, {
+                [classes.btnSelected]: graphSelector === 'users'
+              })}
+              value="users"
+              onClick={() => setGraphSelector('users')}
+            >
+              Users
+            </ToggleButton>
+          </ToggleButtonGroup>
+          {graphSelector === 'activity' && isDataAvailable && <ActivityGraph data={activityGraphData} />}
+          {graphSelector === 'users' && <UserGraph data={userGraphData} />}
         </Paper>
       </div>
-      <div className={classes.mtopp}>
-        <ApiLinks />
-      </div>
-    </div>
+      {/*<div className={classes.mtopp}>*/}
+      {/*  <ApiLinks />*/}
+      {/*</div>*/}
+    </>
   )
 }
 

@@ -1,175 +1,186 @@
+import { Vector3, Quaternion } from 'three'
 import { EngineEvents } from '../../ecs/classes/EngineEvents'
-import { addComponent, getComponent, hasComponent, removeComponent } from '../../ecs/functions/EntityFunctions'
+import { defineQuery, getComponent, hasComponent } from '../../ecs/functions/ComponentFunctions'
 import { TransformComponent } from '../../transform/components/TransformComponent'
 import { ColliderComponent } from '../components/ColliderComponent'
-import { BodyType, PhysXInstance } from 'three-physx'
 import { NetworkObjectComponent } from '../../networking/components/NetworkObjectComponent'
-import { Network } from '../../networking/classes/Network'
 import { Engine } from '../../ecs/classes/Engine'
 import { VelocityComponent } from '../components/VelocityComponent'
 import { RaycastComponent } from '../components/RaycastComponent'
-import { SpawnNetworkObjectComponent } from '../../scene/components/SpawnNetworkObjectComponent'
-import { RigidBodyTagComponent } from '../components/RigidBodyTagComponent'
-import { Quaternion, Vector3 } from 'three'
-import { InterpolationComponent } from '../components/InterpolationComponent'
 import { isClient } from '../../common/functions/isClient'
-import { PrefabType } from '../../networking/templates/PrefabType'
-import { defineQuery, defineSystem, enterQuery, exitQuery, Not, System } from 'bitecs'
-import { ECSWorld } from '../../ecs/classes/World'
-import { ClientAuthoritativeComponent } from '../components/ClientAuthoritativeComponent'
-import { NameComponent } from '../../scene/components/NameComponent'
 import { AvatarComponent } from '../../avatar/components/AvatarComponent'
+import { NetworkWorldAction } from '../../networking/functions/NetworkWorldAction'
+import { World } from '../../ecs/classes/World'
+import { isDynamicBody, isKinematicBody, isStaticBody } from '../classes/Physics'
+import { teleportRigidbody } from '../functions/teleportRigidbody'
+import { CollisionComponent } from '../components/CollisionComponent'
+import matches from 'ts-matches'
+import { useWorld } from '../../ecs/functions/SystemHooks'
+import { EngineActionType } from '../../ecs/classes/EngineService'
 
+function physicsActionReceptor(action: unknown) {
+  const world = useWorld()
+  matches(action).when(NetworkWorldAction.teleportObject.matches, (a) => {
+    const [x, y, z, qX, qY, qZ, qW] = a.pose
+    const entity = world.getNetworkObject(a.object.ownerId, a.object.networkId)
+    const colliderComponent = getComponent(entity, ColliderComponent)
+    if (colliderComponent) {
+      teleportRigidbody(colliderComponent.body, new Vector3(x, y, z), new Quaternion(qX, qY, qZ, qW))
+    }
+  })
+}
 /**
  * @author HydraFire <github.com/HydraFire>
  * @author Josh Field <github.com/HexaField>
  */
 
-export const PhysicsSystem = async (
-  attributes: { worker?: () => Worker; simulationEnabled?: boolean } = {}
-): Promise<System> => {
-  const spawnRigidbodyQuery = defineQuery([SpawnNetworkObjectComponent, RigidBodyTagComponent])
-  const spawnRigidbodyAddQuery = enterQuery(spawnRigidbodyQuery)
-
-  const colliderQuery = defineQuery([Not(AvatarComponent), ColliderComponent, TransformComponent])
-  const colliderRemoveQuery = exitQuery(colliderQuery)
-
+export default async function PhysicsSystem(world: World) {
+  const colliderQuery = defineQuery([ColliderComponent])
   const raycastQuery = defineQuery([RaycastComponent])
-  const raycastRemoveQuery = exitQuery(raycastQuery)
+  const collisionComponent = defineQuery([CollisionComponent])
+  const networkColliderQuery = defineQuery([NetworkObjectComponent, ColliderComponent])
 
-  const networkObjectQuery = defineQuery([NetworkObjectComponent])
-  const networkObjectRemoveQuery = exitQuery(networkObjectQuery)
+  let simulationEnabled = true
 
-  const clientAuthoritativeQuery = defineQuery([
-    NetworkObjectComponent,
-    ClientAuthoritativeComponent,
-    ColliderComponent
-  ])
-
-  let simulationEnabled = false
-
-  Engine.physxWorker = attributes.worker()
-
-  EngineEvents.instance.addEventListener(EngineEvents.EVENTS.ENABLE_SCENE, (ev: any) => {
-    if (typeof ev.physics !== 'undefined') {
-      simulationEnabled = ev.physics
+  Engine.currentWorld.receptors.push((action: EngineActionType) => {
+    switch (action.type) {
+      case EngineEvents.EVENTS.ENABLE_SCENE:
+        if (typeof action.env.physics !== 'undefined') {
+          simulationEnabled = action.env.physics
+        }
+        break
     }
   })
+  world.receptors.push(physicsActionReceptor)
 
-  if (!PhysXInstance.instance) {
-    PhysXInstance.instance = new PhysXInstance()
-  }
+  await world.physics.createScene()
 
-  simulationEnabled = attributes.simulationEnabled ?? true
+  return () => {
+    // for (const entity of spawnRigidbodyQuery.enter()) {
+    //   const { uniqueId, networkId, parameters } = removeComponent(entity, SpawnNetworkObjectComponent)
 
-  await PhysXInstance.instance.initPhysX(Engine.physxWorker, Engine.initOptions.physics.settings)
-  Engine.workers.push(Engine.physxWorker)
+    //   addComponent(entity, TransformComponent, {
+    //     position: new Vector3().copy(parameters.position),
+    //     rotation: new Quaternion().copy(parameters.rotation),
+    //     scale: new Vector3(1, 1, 1)
+    //   })
 
-  return defineSystem((world: ECSWorld) => {
-    const { delta } = world
+    //   // TODO: figure out how we are going to spawn the body
 
-    for (const entity of spawnRigidbodyAddQuery(world)) {
-      const { uniqueId, networkId, parameters } = removeComponent(entity, SpawnNetworkObjectComponent)
+    //   if (isClient) {
+    //     addComponent(entity, InterpolationComponent, {})
+    //   } else {
+    //     dispatchFromServer(NetworkWorldAction.createObject(networkId, uniqueId, PrefabType.RigidBody, parameters))
+    //   }
+    // }
 
-      addComponent(entity, TransformComponent, {
-        position: new Vector3().copy(parameters.position),
-        rotation: new Quaternion().copy(parameters.rotation),
-        scale: new Vector3(1, 1, 1)
-      })
-
-      // TODO: figure out how we are going to spawn the body
-
-      if (isClient) {
-        addComponent(entity, InterpolationComponent, {})
-      } else {
-        Network.instance.worldState.createObjects.push({
-          networkId: networkId,
-          prefabType: PrefabType.RigidBody,
-          uniqueId,
-          parameters: parameters
-        })
-      }
-    }
-
-    for (const entity of colliderRemoveQuery(world)) {
+    for (const entity of colliderQuery.exit()) {
       const colliderComponent = getComponent(entity, ColliderComponent, true)
       if (colliderComponent?.body) {
-        PhysXInstance.instance.removeBody(colliderComponent.body)
+        world.physics.removeBody(colliderComponent.body)
       }
     }
 
-    for (const entity of raycastRemoveQuery(world)) {
-      const raycastComponent = getComponent(entity, RaycastComponent, true)
-      if (raycastComponent) {
-        PhysXInstance.instance.removeRaycastQuery(raycastComponent.raycastQuery)
-      }
+    for (const entity of raycastQuery()) {
+      world.physics.doRaycast(getComponent(entity, RaycastComponent))
     }
 
-    for (const entity of colliderQuery(world)) {
+    for (const entity of colliderQuery()) {
       const velocity = getComponent(entity, VelocityComponent)
       if (!velocity) continue
       const collider = getComponent(entity, ColliderComponent)
       const transform = getComponent(entity, TransformComponent)
-      if ((!isClient && hasComponent(entity, ClientAuthoritativeComponent)) || hasComponent(entity, AvatarComponent))
-        continue
+      const network = getComponent(entity, NetworkObjectComponent)
 
-      if (collider.body.type === BodyType.KINEMATIC || collider.body.type === BodyType.STATIC) {
-        velocity.velocity.subVectors(collider.body.transform.translation, transform.position)
-        collider.body.updateTransform({ translation: transform.position, rotation: transform.rotation })
-      } else if (collider.body.type === BodyType.DYNAMIC) {
-        const { linearVelocity } = collider.body.transform
-        velocity.velocity.copy(linearVelocity)
+      if ((!isClient && network.ownerId !== Engine.userId) || hasComponent(entity, AvatarComponent)) continue
 
-        transform.position.set(
-          collider.body.transform.translation.x,
-          collider.body.transform.translation.y,
-          collider.body.transform.translation.z
-        )
+      if (isStaticBody(collider.body)) {
+        const body = collider.body as PhysX.PxRigidDynamic
+        const currentPose = body.getGlobalPose()
 
-        transform.rotation.set(
-          collider.body.transform.rotation.x,
-          collider.body.transform.rotation.y,
-          collider.body.transform.rotation.z,
-          collider.body.transform.rotation.w
-        )
+        velocity.velocity.subVectors(currentPose.translation as Vector3, transform.position)
+
+        currentPose.translation.x = transform.position.x
+        currentPose.translation.y = transform.position.y
+        currentPose.translation.z = transform.position.z
+        currentPose.rotation.x = transform.rotation.x
+        currentPose.rotation.y = transform.rotation.y
+        currentPose.rotation.z = transform.rotation.z
+        currentPose.rotation.w = transform.rotation.w
+
+        if (isKinematicBody(collider.body)) {
+          body.setKinematicTarget(currentPose)
+        }
+        body.setGlobalPose(currentPose, true)
+      } else if (isDynamicBody(collider.body)) {
+        const body = collider.body as PhysX.PxRigidDynamic
+
+        const linearVelocity = body.getLinearVelocity()
+        velocity.velocity.copy(linearVelocity as Vector3)
+
+        const currentPose = body.getGlobalPose()
+
+        transform.position.copy(currentPose.translation as Vector3)
+
+        transform.rotation.copy(currentPose.rotation as Quaternion)
       }
     }
 
-    for (const entity of clientAuthoritativeQuery(world)) {
-      const networkObject = getComponent(entity, NetworkObjectComponent)
-      const collider = getComponent(entity, ColliderComponent)
-      const velocity = getComponent(entity, VelocityComponent)
-      if (isClient) {
-        Network.instance.clientInputState.transforms.push({
-          networkId: networkObject.networkId,
-          x: collider.body.transform.translation.x,
-          y: collider.body.transform.translation.y,
-          z: collider.body.transform.translation.z,
-          vX: velocity.velocity.x,
-          vY: velocity.velocity.y,
-          vZ: velocity.velocity.z,
-          qX: collider.body.transform.rotation.x,
-          qY: collider.body.transform.rotation.y,
-          qZ: collider.body.transform.rotation.z,
-          qW: collider.body.transform.rotation.w
-        })
-      } else {
+    if (!isClient) {
+      for (const entity of networkColliderQuery()) {
+        const collider = getComponent(entity, ColliderComponent)
         const transform = getComponent(entity, TransformComponent)
-        collider.body.updateTransform({ translation: transform.position, rotation: transform.rotation })
+        const body = collider.body as PhysX.PxRigidDynamic
+        teleportRigidbody(body, transform.position, transform.rotation)
       }
     }
 
-    // TODO: this is temporary - we should refactor all our network entity handling to be on the ECS
-    for (const entity of networkObjectRemoveQuery(world)) {
-      const networkObject = getComponent(entity, NetworkObjectComponent, true)
-      delete Network.instance.networkObjects[networkObject.networkId]
-      const nameComponent = getComponent(entity, NameComponent)
-      nameComponent
-        ? console.log(`removed prefab with name ${nameComponent.name} network id: ${networkObject.networkId}`)
-        : console.log('removed prefab with id ', networkObject.networkId)
+    // clear collision components
+    for (const entity of collisionComponent()) {
+      getComponent(entity, CollisionComponent).collisions = []
     }
 
-    if (simulationEnabled) PhysXInstance.instance?.update()
-    return world
-  })
+    // populate collision components with events over last simulation
+    for (const collisionEvent of world.physics.collisionEventQueue) {
+      if (collisionEvent.controllerID) {
+        const controller = world.physics.controllers.get(collisionEvent.controllerID)
+        const entity = (controller as any).userData
+        getComponent(entity, CollisionComponent).collisions.push(collisionEvent)
+      }
+      if (collisionEvent.shapeA) {
+        const bodyAID = world.physics.bodyIDByShapeID.get((collisionEvent.shapeA as any)._id)!
+        const bodyA = world.physics.bodies.get(bodyAID)
+        const bodyBID = world.physics.bodyIDByShapeID.get((collisionEvent.shapeB as any)._id)!
+        const bodyB = world.physics.bodies.get(bodyBID)
+        if (!bodyA || !bodyB) continue
+        const entityA = (bodyA as any).userData?.entity
+        const entityB = (bodyB as any).userData?.entity
+        getComponent(entityA, CollisionComponent).collisions.push({
+          type: collisionEvent.type,
+          bodySelf: bodyA,
+          bodyOther: bodyB,
+          shapeSelf: collisionEvent.shapeA,
+          shapeOther: collisionEvent.shapeB,
+          contacts: collisionEvent.contacts
+        })
+        getComponent(entityB, CollisionComponent).collisions.push({
+          type: collisionEvent.type,
+          bodySelf: bodyB,
+          bodyOther: bodyA,
+          shapeSelf: collisionEvent.shapeB,
+          shapeOther: collisionEvent.shapeA,
+          contacts: collisionEvent.contacts
+        })
+      }
+    }
+
+    // clear collision queue
+    world.physics.collisionEventQueue = []
+
+    // step physics world
+    for (let i = 0; i < world.physics.substeps; i++) {
+      world.physics.scene.simulate((world.physics.timeScale * world.fixedDelta) / world.physics.substeps, true)
+      world.physics.scene.fetchResults(true)
+    }
+  }
 }

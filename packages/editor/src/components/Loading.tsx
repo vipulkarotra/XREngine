@@ -1,7 +1,6 @@
-import React, { Component } from 'react'
-import PropTypes from 'prop-types'
+import React from 'react'
 import styled from 'styled-components'
-import { withTranslation } from 'react-i18next'
+import { useTranslation } from 'react-i18next'
 
 /**
  * StyledLoading provides the styles for loading component.
@@ -29,22 +28,16 @@ const StyledLoading = (styled as any).div`
  * @author Robert Long
  * @type {component class}
  */
-export class Loading extends Component<{ t: Function }> {
-  static propTypes = {
-    message: PropTypes.string,
-    isFullscreen: PropTypes.bool,
-    t: PropTypes.func
-  }
+export const Loading = (props: any) => {
+  const { t } = useTranslation()
 
   //creating and rendering loading view
-  render() {
-    return (
-      <StyledLoading fullScreen={(this.props as any).fullScreen}>
-        {this.props.t('editor:lbl-return')}
-        {(this.props as any).message}
-      </StyledLoading>
-    )
-  }
+  return (
+    <StyledLoading fullScreen={props.fullScreen}>
+      {t('editor:lbl-return')}
+      {props.message}
+    </StyledLoading>
+  )
 }
 
-export default withTranslation()(Loading)
+export default Loading

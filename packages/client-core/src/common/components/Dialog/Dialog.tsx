@@ -1,63 +1,50 @@
 import React, { useEffect } from 'react'
-import { connect } from 'react-redux'
-import Dialog from '@material-ui/core/Dialog'
-import DialogTitle from '@material-ui/core/DialogTitle'
-import DialogContent from '@material-ui/core/DialogContent'
-import IconButton from '@material-ui/core/IconButton'
-import CloseIcon from '@material-ui/icons/Close'
-import Typography from '@material-ui/core/Typography'
-import { selectDialogState } from '../../reducers/dialog/selector'
-import { closeDialog } from '../../reducers/dialog/service'
-import { bindActionCreators, Dispatch } from 'redux'
+import { useDispatch } from '../../../store'
+import Dialog from '@mui/material/Dialog'
+import DialogTitle from '@mui/material/DialogTitle'
+import DialogContent from '@mui/material/DialogContent'
+import IconButton from '@mui/material/IconButton'
+import CloseIcon from '@mui/icons-material/Close'
+import Typography from '@mui/material/Typography'
+import { useDialogState } from '../../services/DialogService'
+import { DialogAction } from '../../services/DialogService'
 import { useHistory } from 'react-router-dom'
 import styles from './Dialog.module.scss'
 
 interface Props {
   dialog: any
-  closeDialog: typeof closeDialog
 }
-
-const mapStateToProps = (state: any): any => {
-  return {
-    dialog: selectDialogState(state)
-  }
-}
-
-const mapDispatchToProps = (dispatch: Dispatch): any => ({
-  closeDialog: bindActionCreators(closeDialog, dispatch)
-})
 
 const DialogComponent = (props: Props): any => {
-  const { dialog, closeDialog } = props
-  const isOpened = dialog.get('isOpened')
-  const content = dialog.get('content')
+  const dispatch = useDispatch()
+  const dialog = useDialogState()
+  const isOpened = dialog.isOpened
+  const content = dialog.content
   const history = useHistory()
 
   useEffect(() => {
     history.listen(() => {
-      closeDialog()
+      dispatch(DialogAction.dialogClose())
     })
   }, [])
 
   const handleClose = (e: any): void => {
     e.preventDefault()
-    closeDialog()
+    dispatch(DialogAction.dialogClose())
   }
 
   return (
-    <Dialog open={isOpened} onClose={handleClose} aria-labelledby="xr-dialog" color="background">
-      <DialogTitle disableTypography className={styles.dialogTitle}>
-        <Typography variant="h6">{(content && content.title) ?? ''}</Typography>
-        <IconButton aria-label="close" className={styles.dialogCloseButton} onClick={handleClose}>
+    <Dialog open={isOpened.value} onClose={handleClose} aria-labelledby="xr-dialog" color="background">
+      <DialogTitle className={styles.dialogTitle}>
+        <Typography variant="h6">{(content && content?.value?.title) ?? ''}</Typography>
+        <IconButton aria-label="close" className={styles.dialogCloseButton} onClick={handleClose} size="large">
           <CloseIcon />
         </IconButton>
       </DialogTitle>
-
-      <DialogContent className={styles.dialogContent}>{content && content.children}</DialogContent>
+      <DialogContent className={styles.dialogContent}>{content && content?.value?.children}</DialogContent>
     </Dialog>
   )
 }
 
 const DialogWrapper = (props: any): any => <DialogComponent {...props} />
-
-export const UIDialog = connect(mapStateToProps, mapDispatchToProps)(DialogWrapper)
+export const UIDialog = DialogWrapper

@@ -1,44 +1,88 @@
-import Command from './Command'
-import { TransformSpace } from '../constants/TransformSpace'
-import { serializeObject3D, serializeVector3 } from '../functions/debug'
+import Command, { CommandParams } from './Command'
+import arrayShallowEqual from '../functions/arrayShallowEqual'
+import { serializeObject3DArray, serializeVector3 } from '../functions/debug'
+import { CommandManager } from '../managers/CommandManager'
+import EditorEvents from '../constants/EditorEvents'
+import { Matrix4, Vector3 } from 'three'
+import { EntityTreeNode } from '@xrengine/engine/src/ecs/classes/EntityTree'
+import { getComponent } from '@xrengine/engine/src/ecs/functions/ComponentFunctions'
+import { Object3DComponent } from '@xrengine/engine/src/scene/components/Object3DComponent'
+import { TransformComponent } from '@xrengine/engine/src/transform/components/TransformComponent'
+
+export interface RotateAroundCommandParams extends CommandParams {
+  axis: Vector3
+
+  angle: number
+
+  pivot: Vector3
+}
+
 export default class RotateAroundCommand extends Command {
-  object: any
-  pivot: any
-  axis: any
-  angle: any
-  oldPosition: any
-  oldRotation: any
-  constructor(editor, object, pivot, axis, angle) {
-    super(editor)
-    this.object = object
-    this.pivot = pivot.clone()
-    this.axis = axis.clone()
-    this.angle = angle
-    this.oldPosition = object.position.clone()
-    this.oldRotation = object.rotation.clone()
+  pivot: Vector3
+
+  axis: Vector3
+
+  angle: number
+
+  constructor(objects: EntityTreeNode[], params: RotateAroundCommandParams) {
+    super(objects, params)
+
+    this.pivot = params.pivot.clone()
+    this.axis = params.axis.clone()
+    this.angle = params.angle
   }
+
   execute() {
-    this.editor.rotateAround(this.object, this.pivot, this.axis, this.angle, false)
+    this.rotateAround(this.affectedObjects, this.pivot, this.axis, this.angle)
+    this.emitAfterExecuteEvent()
   }
-  shouldUpdate(newCommand) {
-    return this.object === newCommand.object && this.pivot.equals(newCommand.pivot) && this.axis.equals(newCommand.axis)
+
+  shouldUpdate(newCommand: RotateAroundCommand) {
+    return (
+      this.pivot.equals(newCommand.pivot) &&
+      this.axis.equals(newCommand.axis) &&
+      arrayShallowEqual(this.affectedObjects, newCommand.affectedObjects)
+    )
   }
+
   update(command) {
     this.angle += command.angle
-    this.editor.rotateAround(this.object, this.pivot, this.axis, command.angle, false)
+    this.rotateAround(this.affectedObjects, this.pivot, this.axis, command.angle)
+    this.emitAfterExecuteEvent()
   }
+
   undo() {
-    // TODO: Add editor.setMatrix command
-    this.editor.setPosition(this.object, this.oldPosition, TransformSpace.Local, false, false)
-    this.editor.setRotation(this.object, this.oldRotation, TransformSpace.Local, false, false)
-    this.editor.emit('objectsChanged', this.objects, 'matrix')
+    this.rotateAround(this.affectedObjects, this.pivot, this.axis, this.angle * -1)
+    this.emitAfterExecuteEvent()
   }
-  objects(arg0: string, objects: any, arg2: string) {
-    throw new Error('Method not implemented.')
-  }
+
   toString() {
-    return `RotateAroundCommand id: ${this.id} object: ${serializeObject3D(this.object)} pivot: ${serializeVector3(
-      this.pivot
-    )} axis: ${serializeVector3(this.axis)} angle: ${this.angle}`
+    return `RotateAroundMultipleCommand id: ${this.id} objects: ${serializeObject3DArray(this.affectedObjects)}
+    pivot: ${serializeVector3(this.pivot)} axis: { ${serializeVector3(this.axis)} angle: ${this.angle} }`
+  }
+
+  emitAfterExecuteEvent() {
+    if (this.shouldEmitEvent) {
+      CommandManager.instance.emitEvent(EditorEvents.OBJECTS_CHANGED, this.affectedObjects, 'matrix')
+    }
+  }
+
+  rotateAround(objects: EntityTreeNode[], pivot: Vector3, axis: Vector3, angle: number): void {
+    const pivotToOriginMatrix = new Matrix4().makeTranslation(-pivot.x, -pivot.y, -pivot.z)
+    const originToPivotMatrix = new Matrix4().makeTranslation(pivot.x, pivot.y, pivot.z)
+    const rotationMatrix = new Matrix4().makeRotationAxis(axis, angle)
+
+    for (let i = 0; i < objects.length; i++) {
+      const obj3d = getComponent(objects[i].entity, Object3DComponent).value
+      const transform = getComponent(objects[i].entity, TransformComponent)
+
+      new Matrix4()
+        .copy(obj3d.matrixWorld)
+        .premultiply(pivotToOriginMatrix)
+        .premultiply(rotationMatrix)
+        .premultiply(originToPivotMatrix)
+        .premultiply(obj3d.parent!.matrixWorld.clone().invert())
+        .decompose(transform.position, transform.rotation, transform.scale)
+    }
   }
 }

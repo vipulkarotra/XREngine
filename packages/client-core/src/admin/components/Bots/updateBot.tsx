@@ -1,95 +1,64 @@
-import React from 'react'
-import Button from '@material-ui/core/Button'
-import Dialog from '@material-ui/core/Dialog'
-import DialogActions from '@material-ui/core/DialogActions'
-import DialogContent from '@material-ui/core/DialogContent'
-import DialogTitle from '@material-ui/core/DialogTitle'
-import { useStyle, useStylesForBots as useStyles } from './styles'
-import Select from '@material-ui/core/Select'
-import MenuItem from '@material-ui/core/MenuItem'
-import Paper from '@material-ui/core/Paper'
-import FormControl from '@material-ui/core/FormControl'
-import InputBase from '@material-ui/core/InputBase'
-import { Save, Autorenew } from '@material-ui/icons'
-import { selectAdminLocationState } from '../../reducers/admin/location/selector'
-import { selectAdminInstanceState } from '../../reducers/admin/instance/selector'
-import { connect } from 'react-redux'
-import { formValid } from './validation'
-import MuiAlert from '@material-ui/lab/Alert'
-import Snackbar from '@material-ui/core/Snackbar'
-import { updateBotAsAdmin } from '../../reducers/admin/bots/service'
-import { Dispatch, bindActionCreators } from 'redux'
-import { selectAuthState } from '../../../user/reducers/auth/selector'
-import Grid from '@material-ui/core/Grid'
-import IconButton from '@material-ui/core/IconButton'
-import { fetchAdminInstances } from '../../reducers/admin/instance/service'
-import { fetchAdminLocations } from '../../reducers/admin/location/service'
+import React, { useEffect, useState } from 'react'
+import Button from '@mui/material/Button'
+import Dialog from '@mui/material/Dialog'
+import DialogActions from '@mui/material/DialogActions'
+import DialogContent from '@mui/material/DialogContent'
+import DialogTitle from '@mui/material/DialogTitle'
+import Select from '@mui/material/Select'
+import MenuItem from '@mui/material/MenuItem'
+import Paper from '@mui/material/Paper'
+import FormControl from '@mui/material/FormControl'
+import InputBase from '@mui/material/InputBase'
+import { Save, Autorenew } from '@mui/icons-material'
+import { useLocationState } from '../../services/LocationService'
+import { useInstanceState } from '../../services/InstanceService'
+import { useDispatch } from '../../../store'
+import { validateForm } from './validation'
+import MuiAlert from '@mui/material/Alert'
+import Snackbar from '@mui/material/Snackbar'
+import { BotService } from '../../services/BotsService'
+import { useAuthState } from '../../../user/services/AuthService'
+import Grid from '@mui/material/Grid'
+import IconButton from '@mui/material/IconButton'
+import { InstanceService } from '../../services/InstanceService'
+import { LocationService } from '../../services/LocationService'
+import { useStyles } from '../../styles/ui'
+import AlertMessage from '../../common/AlertMessage'
+
+import { Instance } from '@xrengine/common/src/interfaces/Instance'
 
 interface Props {
   open: boolean
   handleClose: () => void
   bot: any
-  adminLocationState?: any
-  adminInstanceState?: any
-  updateBotAsAdmin?: any
-  authState?: any
-  fetchAdminInstances?: any
-  fetchAdminLocations?: any
-}
-
-const mapStateToProps = (state: any): any => {
-  return {
-    adminLocationState: selectAdminLocationState(state),
-    adminInstanceState: selectAdminInstanceState(state),
-    authState: selectAuthState(state)
-  }
-}
-
-const mapDispatchToProps = (dispatch: Dispatch): any => ({
-  updateBotAsAdmin: bindActionCreators(updateBotAsAdmin, dispatch),
-  fetchAdminLocations: bindActionCreators(fetchAdminLocations, dispatch),
-  fetchAdminInstances: bindActionCreators(fetchAdminInstances, dispatch)
-})
-
-const Alert = (props) => {
-  return <MuiAlert elevation={6} variant="filled" {...props} />
 }
 
 const UpdateBot = (props: Props) => {
-  const {
-    open,
-    handleClose,
-    bot,
-    adminLocationState,
-    adminInstanceState,
-    updateBotAsAdmin,
-    authState,
-    fetchAdminLocations,
-    fetchAdminInstances
-  } = props
-  const classx = useStyle()
+  const { open, handleClose, bot } = props
+  const adminInstanceState = useInstanceState()
+  const dispatch = useDispatch()
   const classes = useStyles()
-  const [state, setState] = React.useState({
+  const [state, setState] = useState({
     name: '',
     description: '',
     instance: '',
     location: ''
   })
-  const [formErrors, setFormErrors] = React.useState({
+  const [formErrors, setFormErrors] = useState({
     name: '',
     description: '',
     location: ''
   })
-  const [currentInstance, setCurrentIntance] = React.useState([])
-  const [openAlter, setOpenAlter] = React.useState(false)
-  const [error, setError] = React.useState('')
-  const adminLocation = adminLocationState.get('locations')
-  const locationData = adminLocation.get('locations')
-  const adminInstances = adminInstanceState.get('instances')
-  const instanceData = adminInstances.get('instances')
-  const user = authState.get('user')
+  const [currentInstance, setCurrentIntance] = useState<Instance[]>([])
+  const [openAlter, setOpenAlter] = useState(false)
+  const [error, setError] = useState('')
+  const adminLocation = useLocationState()
+  const locationData = adminLocation.locations
+  const adminInstances = adminInstanceState
+  const instanceData = adminInstances.instances
+  const user = useAuthState().user
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (bot) {
       setState({
         name: bot?.name,
@@ -121,26 +90,27 @@ const UpdateBot = (props: Props) => {
     setState({ ...state, [names]: value })
   }
 
-  const data = []
-  instanceData.forEach((element) => {
+  const data: Instance[] = []
+  instanceData.value.forEach((element) => {
     data.push(element)
   })
 
-  React.useEffect(() => {
-    if (bot) {
-      const instanceFilter = data.filter((el) => el.location.id === state.location)
-      if (instanceFilter.length > 0) {
-        setState({ ...state, instance: state.instance || '' })
-        setCurrentIntance(instanceFilter)
-      }
+  useEffect(() => {
+    const instanceFilter = data.filter((el) => el.locationId === state.location)
+    if (instanceFilter.length > 0) {
+      setState({ ...state, instance: state.instance || '' })
+      setCurrentIntance(instanceFilter)
+    } else {
+      setCurrentIntance([])
+      setState({ ...state, instance: '' })
     }
-  }, [state.location, bot, adminInstanceState])
+  }, [state.location, adminInstanceState.instances.value.length])
 
   const handleUpdate = () => {
     const data = {
       name: state.name,
       instanceId: state.instance || null,
-      userId: user.id,
+      userId: user.id.value,
       description: state.description,
       locationId: state.location
     }
@@ -155,8 +125,8 @@ const UpdateBot = (props: Props) => {
       temp.location = "Location can't be empty"
     }
     setFormErrors(temp)
-    if (formValid(state, formErrors)) {
-      updateBotAsAdmin(bot.id, data)
+    if (validateForm(state, formErrors)) {
+      BotService.updateBotAsAdmin(bot.id, data)
       setState({ name: '', description: '', instance: '', location: '' })
       setCurrentIntance([])
       handleClose()
@@ -166,11 +136,19 @@ const UpdateBot = (props: Props) => {
     }
   }
 
-  const handleCloseAlter = (event, reason) => {
+  const fetchAdminInstances = () => {
+    InstanceService.fetchAdminInstances()
+  }
+
+  const handleCloseAlter = (event?: React.SyntheticEvent | Event, reason?: string) => {
     if (reason === 'clickaway') {
       return
     }
     setOpenAlter(false)
+  }
+
+  const fetchAdminLocations = () => {
+    LocationService.fetchAdminLocations()
   }
 
   return (
@@ -178,7 +156,7 @@ const UpdateBot = (props: Props) => {
       <Dialog
         open={open}
         aria-labelledby="form-dialog-title"
-        classes={{ paper: classx.dialoPaper }}
+        classes={{ paper: classes.paperDialog }}
         onClose={handleClose}
       >
         <DialogTitle id="form-dialog-title">UPDATE BOT</DialogTitle>
@@ -226,12 +204,12 @@ const UpdateBot = (props: Props) => {
                     name="location"
                     displayEmpty
                     className={classes.select}
-                    MenuProps={{ classes: { paper: classx.selectPaper } }}
+                    MenuProps={{ classes: { paper: classes.selectPaper } }}
                   >
                     <MenuItem value="" disabled>
                       <em>Select location</em>
                     </MenuItem>
-                    {locationData.map((el) => (
+                    {locationData.value.map((el) => (
                       <MenuItem value={el.id} key={el.id}>
                         {el.name}
                       </MenuItem>
@@ -242,7 +220,7 @@ const UpdateBot = (props: Props) => {
             </Grid>
             <Grid item xs={2} style={{ display: 'flex' }}>
               <div style={{ marginLeft: 'auto' }}>
-                <IconButton onClick={() => fetchAdminLocations()}>
+                <IconButton onClick={fetchAdminLocations} size="large">
                   <Autorenew style={{ color: '#fff' }} />
                 </IconButton>
               </div>
@@ -267,7 +245,7 @@ const UpdateBot = (props: Props) => {
                     onChange={handleInputChange}
                     className={classes.select}
                     name="instance"
-                    MenuProps={{ classes: { paper: classx.selectPaper } }}
+                    MenuProps={{ classes: { paper: classes.selectPaper } }}
                   >
                     <MenuItem value="" disabled>
                       <em>Select instance</em>
@@ -283,7 +261,7 @@ const UpdateBot = (props: Props) => {
             </Grid>
             <Grid item xs={2} style={{ display: 'flex' }}>
               <div style={{ marginLeft: 'auto' }}>
-                <IconButton onClick={() => fetchAdminInstances()}>
+                <IconButton onClick={fetchAdminInstances} size="large">
                   <Autorenew style={{ color: '#fff' }} />
                 </IconButton>
               </div>
@@ -298,6 +276,7 @@ const UpdateBot = (props: Props) => {
             className={classes.saveBtn}
             onClick={() => {
               setState({ name: '', description: '', instance: '', location: '' })
+              setFormErrors({ name: '', description: '', location: '' })
               handleClose()
             }}
           >
@@ -308,19 +287,10 @@ const UpdateBot = (props: Props) => {
           </Button>
         </DialogActions>
       </Dialog>
-      <Snackbar
-        open={openAlter}
-        autoHideDuration={6000}
-        onClose={handleCloseAlter}
-        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-      >
-        <Alert onClose={handleCloseAlter} severity="warning">
-          {' '}
-          {error}{' '}
-        </Alert>
-      </Snackbar>
+
+      <AlertMessage open={openAlter} handleClose={handleCloseAlter} severity="warning" message={error} />
     </div>
   )
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(UpdateBot)
+export default UpdateBot

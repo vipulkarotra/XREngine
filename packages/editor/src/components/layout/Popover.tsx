@@ -1,8 +1,16 @@
-import React, { useRef, useState, useCallback } from 'react'
-import PropTypes from 'prop-types'
+import React, { useRef, useCallback, ReactNode } from 'react'
 import Portal from './Portal'
 import Positioner from './Positioner'
 import Overlay from './Overlay'
+import { useHookstate } from '@speigg/hookstate'
+
+interface PopoverProp {
+  children?: ReactNode
+  padding?: any
+  position?: any
+  renderContent?: any
+  disabled?: boolean
+}
 
 /**
  *
@@ -15,9 +23,11 @@ import Overlay from './Overlay'
  * @param {any} rest
  * @returns
  */
-export function Popover({ children, padding, position, renderContent, disabled, ...rest }) {
-  const popoverTriggerRef = useRef()
-  const [isOpen, setIsOpen] = useState(false)
+export function Popover({ children, padding, position, renderContent, disabled, ...rest }: PopoverProp) {
+  const popoverTriggerRef = useRef(null)
+  const state = useHookstate({
+    isOpen: false
+  })
 
   /**
    *
@@ -25,9 +35,9 @@ export function Popover({ children, padding, position, renderContent, disabled, 
    */
   const onOpen = useCallback(() => {
     if (!disabled) {
-      setIsOpen(true)
+      state.isOpen.set(true)
     }
-  }, [setIsOpen, disabled])
+  }, [state.isOpen.value, disabled])
 
   /**
    *
@@ -35,10 +45,10 @@ export function Popover({ children, padding, position, renderContent, disabled, 
    */
   const onClose = useCallback(
     (e) => {
-      setIsOpen(false)
+      state.isOpen.set(false)
       e.stopPropagation()
     },
-    [setIsOpen]
+    [state.isOpen.value]
   )
 
   /**
@@ -60,7 +70,7 @@ export function Popover({ children, padding, position, renderContent, disabled, 
   return (
     <div ref={popoverTriggerRef} onClick={onOpen} {...rest}>
       {children}
-      {isOpen && (
+      {state.isOpen.value && (
         <Portal>
           <Overlay onClick={onClose} />
           <Positioner onClick={onPreventClose} getTargetRef={getTargetRef} padding={padding} position={position}>
@@ -72,11 +82,4 @@ export function Popover({ children, padding, position, renderContent, disabled, 
   )
 }
 
-Popover.propTypes = {
-  disabled: PropTypes.bool,
-  children: PropTypes.node,
-  padding: PropTypes.number,
-  position: PropTypes.string,
-  renderContent: PropTypes.func.isRequired
-}
 export default Popover

@@ -1,4 +1,3 @@
-import { ServiceAddons } from '@feathersjs/feathers'
 import { Application } from '../../../declarations'
 import { UserRelationship } from './user-relationship.class'
 import createModel from './user-relationship.model'
@@ -9,11 +8,11 @@ import userRalationshipDocs from './user-ralationship.docs'
 
 declare module '../../../declarations' {
   interface ServiceTypes {
-    'user-relationship': UserRelationship & ServiceAddons<any>
+    'user-relationship': UserRelationship
   }
 }
 
-export default (app: Application): any => {
+export default (app: Application) => {
   const options = {
     Model: createModel(app),
     paginate: app.get('paginate'),
@@ -27,11 +26,11 @@ export default (app: Application): any => {
    */
   const event = new UserRelationship(options, app)
   event.docs = userRalationshipDocs
-  app.use('/user-relationship', event)
+  app.use('user-relationship', event)
 
   const service = app.service('user-relationship')
 
-  service.hooks(hooks as any)
+  service.hooks(hooks)
 
   // service.publish('created', async (data): Promise<any> => {
   //   data.user1 = await app.service('user').get(data.userId1)
@@ -99,7 +98,7 @@ export default (app: Application): any => {
         //     }
         //   });
         // }
-        if (data.dataValues != null) {
+        if (data?.dataValues != null) {
           data.dataValues.user = await app.service('user').get(data.userId)
           data.dataValues.relatedUser = await app.service('user').get(data.relatedUserId)
         } else {
@@ -170,6 +169,13 @@ export default (app: Application): any => {
       })
       if (channel != null) {
         await app.service('channel').remove(channel.id)
+      }
+      if (data?.dataValues != null) {
+        data.dataValues.user = await app.service('user').get(data.userId)
+        data.dataValues.relatedUser = await app.service('user').get(data.relatedUserId)
+      } else {
+        data.user = await app.service('user').get(data.userId)
+        data.relatedUser = await app.service('user').get(data.relatedUserId)
       }
       const targetIds = [data.userId, data.relatedUserId]
       // eslint-disable-next-line @typescript-eslint/restrict-template-expressions

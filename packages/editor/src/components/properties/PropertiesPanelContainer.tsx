@@ -1,13 +1,22 @@
-import React, { Component } from 'react'
-import PropTypes from 'prop-types'
-import { withEditor } from '../contexts/EditorContext'
-import DefaultNodeEditor from './DefaultNodeEditor'
+import React, { useEffect, useState } from 'react'
 import styled from 'styled-components'
 import TransformPropertyGroup from './TransformPropertyGroup'
 import NameInputGroup from './NameInputGroup'
 import InputGroup from '../inputs/InputGroup'
 import BooleanInput from '../inputs/BooleanInput'
-import { withTranslation } from 'react-i18next'
+import { useTranslation } from 'react-i18next'
+import EditorEvents from '../../constants/EditorEvents'
+import { CommandManager } from '../../managers/CommandManager'
+import { getNodeEditorsForEntity } from '../../functions/PrefabEditors'
+import { hasComponent } from '@xrengine/engine/src/ecs/functions/ComponentFunctions'
+import { VisibleComponent } from '@xrengine/engine/src/scene/components/VisibleComponent'
+import { PersistTagComponent } from '@xrengine/engine/src/scene/components/PersistTagComponent'
+import { PreventBakeTagComponent } from '@xrengine/engine/src/scene/components/PreventBakeTagComponent'
+import EditorCommands from '../../constants/EditorCommands'
+import { TagComponentOperation } from '../../commands/TagComponentCommand'
+import { DisableTransformTagComponent } from '@xrengine/engine/src/transform/components/DisableTransformTagComponent'
+import { TransformComponent } from '@xrengine/engine/src/transform/components/TransformComponent'
+import { SceneTagComponent } from '@xrengine/engine/src/scene/components/SceneTagComponent'
 
 /**
  * StyledNodeEditor used as wrapper container element properties container.
@@ -16,9 +25,6 @@ import { withTranslation } from 'react-i18next'
  * @type {styled component}
  */
 const StyledNodeEditor = (styled as any).div`
-  display: flex;
-  flex: 1;
-  flex-direction: column;
 `
 
 /**
@@ -39,10 +45,6 @@ const PropertiesHeader = (styled as any).div`
  *  @type {Styled Component}
  */
 const NameInputGroupContainer = (styled as any).div`
-  display: flex;
-  flex-flow: row wrap;
-  align-items: flex-start;
-  padding: 8px 0;
 `
 /**
  * Styled component used to provide styles for visiblity checkbox.
@@ -50,12 +52,8 @@ const NameInputGroupContainer = (styled as any).div`
  * @author Robert Long
  */
 const VisibleInputGroup = (styled as any)(InputGroup)`
-  display: flex;
-  flex: 0;
-
   & > label {
     width: auto !important;
-    padding-right: 8px;
   }
 `
 
@@ -65,12 +63,8 @@ const VisibleInputGroup = (styled as any)(InputGroup)`
  * @author Robert Long
  */
 const PersistInputGroup = (styled as any)(InputGroup)`
- display: flex;
- flex: 0;
-
  & > label {
    width: auto !important;
-   padding-right: 8px;
  }
 `
 
@@ -81,9 +75,6 @@ const PersistInputGroup = (styled as any)(InputGroup)`
  * @type {Styled Component}
  */
 const PropertiesPanelContent = (styled as any).div`
-  display: flex;
-  flex-direction: column;
-  flex: 1;
   overflow-y: auto;
   height: 100%;
 `
@@ -95,11 +86,14 @@ const PropertiesPanelContent = (styled as any).div`
  * @type {Styled component}
  */
 const NoNodeSelectedMessage = (styled as any).div`
+  height: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 100%;
+  color: white;
 `
+
+const PropsToWatch = ['position', 'rotation', 'scale', 'matrix']
 
 /**
  * PropertiesPanelContainer used to render editor view to customize property of selected element.
@@ -107,135 +101,110 @@ const NoNodeSelectedMessage = (styled as any).div`
  * @author Robert Long
  * @extends Component
  */
-class PropertiesPanelContainer extends Component<{ t: Function }> {
-  static propTypes = {
-    editor: PropTypes.object
-  }
-
+export const PropertiesPanelContainer = () => {
   //setting the props and state
-  constructor(props) {
-    super(props)
+  const [selected, setSelected] = useState(CommandManager.instance.selected)
+  const { t } = useTranslation()
 
-    this.state = {
-      selected: props.editor.selected
-    }
-  }
+  const onSelectionChanged = () => setSelected([...CommandManager.instance.selected])
 
-  // adding listeners when component get mounted
-  componentDidMount() {
-    const editor = (this.props as any).editor
-    editor.addListener('selectionChanged', this.onSelectionChanged)
-    editor.addListener('objectsChanged', this.onObjectsChanged)
-  }
+  const onObjectsChanged = (objects, property) => {
+    const selected = CommandManager.instance.selected
 
-  // removing listeners when components get unmounted
-  componentWillUnmount() {
-    const editor = (this.props as any).editor
-    editor.removeListener('selectionChanged', this.onSelectionChanged)
-    editor.removeListener('objectsChanged', this.onObjectsChanged)
-  }
-
-  // updating state when selection of element get changed
-  onSelectionChanged = () => {
-    this.setState({ selected: (this.props as any).editor.selected })
-  }
-
-  //function to handle the changes object properties
-  onObjectsChanged = (objects, property) => {
-    const selected = (this.props as any).editor.selected
-
-    if (property === 'position' || property === 'rotation' || property === 'scale' || property === 'matrix') {
-      return
-    }
+    if (PropsToWatch.includes(property)) return
 
     for (let i = 0; i < objects.length; i++) {
       if (selected.indexOf(objects[i]) !== -1) {
-        this.setState({ selected: (this.props as any).editor.selected })
+        setSelected([...CommandManager.instance.selected])
         return
       }
     }
   }
 
-  // function to handle the changes property visible
-  onChangeVisible = (value) => {
-    ;((this.props as any).editor as any).setPropertySelected('visible', value)
+  useEffect(() => {
+    CommandManager.instance.addListener(EditorEvents.SELECTION_CHANGED.toString(), onSelectionChanged)
+    CommandManager.instance.addListener(EditorEvents.OBJECTS_CHANGED.toString(), onObjectsChanged)
+
+    return () => {
+      CommandManager.instance.removeListener(EditorEvents.SELECTION_CHANGED.toString(), onSelectionChanged)
+      CommandManager.instance.removeListener(EditorEvents.OBJECTS_CHANGED.toString(), onObjectsChanged)
+    }
+  }, [])
+
+  const onChangeVisible = (value) => {
+    CommandManager.instance.executeCommandWithHistoryOnSelection(EditorCommands.TAG_COMPONENT, {
+      operation: {
+        component: VisibleComponent,
+        type: value ? TagComponentOperation.ADD : TagComponentOperation.REMOVE
+      }
+    })
   }
 
-  onChangeBakeStatic = (value) => {
-    ;((this.props as any).editor as any).setPropertySelected('includeInCubemapBake', value)
+  const onChangeBakeStatic = (value) => {
+    CommandManager.instance.executeCommandWithHistoryOnSelection(EditorCommands.TAG_COMPONENT, {
+      operation: {
+        component: PreventBakeTagComponent,
+        type: value ? TagComponentOperation.ADD : TagComponentOperation.REMOVE
+      }
+    })
   }
 
-  onChangePersist = (value) => {
-    ;((this.props as any).editor as any).setPropertySelected('persist', value)
+  const onChangePersist = (value) => {
+    CommandManager.instance.executeCommandWithHistoryOnSelection(EditorCommands.TAG_COMPONENT, {
+      operation: {
+        component: PersistTagComponent,
+        type: value ? TagComponentOperation.ADD : TagComponentOperation.REMOVE
+      }
+    })
   }
 
   //rendering editor views for customization of element properties
-  render() {
-    const editor = (this.props as any).editor
-    const selected = (this.state as any).selected
+  let content
+  const multiEdit = selected.length > 1
+  const node = selected[selected.length - 1]
 
-    let content
+  if (!node) {
+    content = <NoNodeSelectedMessage>{t('editor:properties.noNodeSelected')}</NoNodeSelectedMessage>
+  } else {
+    // get all editors that this entity has a component for
+    const editors = getNodeEditorsForEntity(node.entity)
 
-    if (selected.length === 0) {
-      content = <NoNodeSelectedMessage>{this.props.t('editor:properties.noNodeSelected')}</NoNodeSelectedMessage>
-    } else {
-      const activeNode = selected[selected.length - 1]
-      const NodeEditor = editor.getNodeEditor(activeNode) || DefaultNodeEditor
+    const transform =
+      hasComponent(node.entity, TransformComponent) &&
+      !selected.some((node) => hasComponent(node.entity, DisableTransformTagComponent))
 
-      const multiEdit = selected.length > 1
-
-      let showNodeEditor = true
-
-      for (let i = 0; i < selected.length - 1; i++) {
-        if (editor.getNodeEditor(selected[i]) !== NodeEditor) {
-          showNodeEditor = false
-          break
-        }
-      }
-
-      let nodeEditor
-
-      if (showNodeEditor) {
-        nodeEditor = <NodeEditor multiEdit={multiEdit} node={activeNode} editor={editor} />
-      } else {
-        nodeEditor = (
-          <NoNodeSelectedMessage>{this.props.t('editor:properties.multipleNodeSelected')}</NoNodeSelectedMessage>
-        )
-      }
-
-      const disableTransform = selected.some((node) => node.disableTransform)
-      const haveStaticTags = selected.some((node) => node.haveStaticTags)
-
-      content = (
-        <StyledNodeEditor>
-          <PropertiesHeader>
-            <NameInputGroupContainer>
-              <NameInputGroup node={activeNode} editor={editor} />
-              {activeNode.nodeName !== 'Scene' && (
-                <>
-                  <VisibleInputGroup name="Visible" label={this.props.t('editor:properties.lbl-visible')}>
-                    <BooleanInput value={activeNode.visible} onChange={this.onChangeVisible} />
-                  </VisibleInputGroup>
-                  {haveStaticTags && (
-                    <VisibleInputGroup name="Bake Static" label="Bake Static">
-                      <BooleanInput value={activeNode.includeInCubemapBake} onChange={this.onChangeBakeStatic} />
-                    </VisibleInputGroup>
-                  )}
-                </>
-              )}
-            </NameInputGroupContainer>
-            <PersistInputGroup name="Persist" label={this.props.t('editor:properties.lbl-persist')}>
-              <BooleanInput value={activeNode.persist} onChange={this.onChangePersist} />
-            </PersistInputGroup>
-            {!disableTransform && <TransformPropertyGroup node={activeNode} editor={editor} />}
-          </PropertiesHeader>
-          {nodeEditor}
-        </StyledNodeEditor>
-      )
-    }
-
-    return <PropertiesPanelContent>{content}</PropertiesPanelContent>
+    content = (
+      <StyledNodeEditor>
+        <PropertiesHeader>
+          <NameInputGroupContainer>
+            <NameInputGroup node={node} key={node.entity} />
+            {!hasComponent(node.entity, SceneTagComponent) && (
+              <>
+                <VisibleInputGroup name="Visible" label={t('editor:properties.lbl-visible')}>
+                  <BooleanInput value={hasComponent(node.entity, VisibleComponent)} onChange={onChangeVisible} />
+                </VisibleInputGroup>
+                <VisibleInputGroup name="Prevent Baking" label={t('editor:properties.lbl-preventBake')}>
+                  <BooleanInput
+                    value={hasComponent(node.entity, PreventBakeTagComponent)}
+                    onChange={onChangeBakeStatic}
+                  />
+                </VisibleInputGroup>
+              </>
+            )}
+          </NameInputGroupContainer>
+          <PersistInputGroup name="Persist" label={t('editor:properties.lbl-persist')}>
+            <BooleanInput value={hasComponent(node.entity, PersistTagComponent)} onChange={onChangePersist} />
+          </PersistInputGroup>
+          {transform && <TransformPropertyGroup node={node} />}
+        </PropertiesHeader>
+        {editors.map((Editor, i) => (
+          <Editor key={i} multiEdit={multiEdit} node={node} />
+        ))}
+      </StyledNodeEditor>
+    )
   }
+
+  return <PropertiesPanelContent>{content}</PropertiesPanelContent>
 }
 
-export default withTranslation()(withEditor(PropertiesPanelContainer))
+export default PropertiesPanelContainer

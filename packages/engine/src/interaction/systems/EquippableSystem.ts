@@ -1,86 +1,116 @@
-import { isClient } from '../../common/functions/isClient'
-import { getComponent } from '../../ecs/functions/EntityFunctions'
-import { NetworkObjectComponent } from '../../networking/components/NetworkObjectComponent'
+import {
+  defineQuery,
+  getComponent,
+  hasComponent,
+  removeComponent,
+  addComponent
+} from '../../ecs/functions/ComponentFunctions'
 import { TransformComponent } from '../../transform/components/TransformComponent'
 import { EquipperComponent } from '../components/EquipperComponent'
-import { EquippedStateUpdateSchema } from '../enums/EquippedEnums'
 import { ColliderComponent } from '../../physics/components/ColliderComponent'
-import { NetworkObjectUpdateType } from '../../networking/templates/NetworkObjectUpdates'
-import { sendClientObjectUpdate } from '../../networking/functions/sendClientObjectUpdate'
-import { BodyType } from 'three-physx'
-import { BinaryValue } from '../../common/enums/BinaryValue'
 import { getHandTransform } from '../../xr/functions/WebXRFunctions'
-import { defineQuery, defineSystem, enterQuery, exitQuery, Not, System } from 'bitecs'
-import { AvatarComponent } from '../../avatar/components/AvatarComponent'
-import { LocalInputReceiverComponent } from '../../input/components/LocalInputReceiverComponent'
-import { ECSWorld } from '../../ecs/classes/World'
+import { World } from '../../ecs/classes/World'
+import { NetworkWorldAction } from '../../networking/functions/NetworkWorldAction'
+import matches from 'ts-matches'
+import { useWorld } from '../../ecs/functions/SystemHooks'
+import { teleportRigidbody } from '../../physics/functions/teleportRigidbody'
+import { Engine } from '../../ecs/classes/Engine'
+import { getParity } from '../functions/equippableFunctions'
+import { EquippedComponent } from '../components/EquippedComponent'
+import { NetworkObjectOwnedTag } from '../../networking/components/NetworkObjectOwnedTag'
+import { BodyType } from '../../physics/types/PhysicsTypes'
+
+function equippableActionReceptor(action) {
+  const world = useWorld()
+
+  matches(action).when(NetworkWorldAction.setEquippedObject.matches, (a) => {
+    if (a.$from === Engine.userId) return
+    const equipper = world.getUserAvatarEntity(a.$from)
+    const equipped = world.getNetworkObject(a.object.ownerId, a.object.networkId)
+    const attachmentPoint = a.attachmentPoint
+    if (!equipped) {
+      return console.warn(`Equipped entity with id ${equipped} does not exist! You should probably reconnect...`)
+    }
+    if (a.equip) {
+      if (!hasComponent(equipper, EquipperComponent) && !hasComponent(equipped, EquippedComponent)) {
+        addComponent(equipper, EquipperComponent, { equippedEntity: equipped, data: {} as any })
+        addComponent(equipped, EquippedComponent, { equipperEntity: equipper, attachmentPoint: attachmentPoint })
+      }
+    } else {
+      const equipperComponent = getComponent(equipper, EquipperComponent)
+      if (!equipperComponent) return
+
+      removeComponent(equipper, EquipperComponent)
+    }
+  })
+}
+
+export function equippableQueryEnter(entity) {
+  const equipperComponent = getComponent(entity, EquipperComponent)
+  if (equipperComponent) {
+    const equippedEntity = getComponent(entity, EquipperComponent).equippedEntity
+    const collider = getComponent(equippedEntity, ColliderComponent)
+    if (collider) {
+      let phsyxRigidbody = collider.body as PhysX.PxRigidBody
+      useWorld().physics.changeRigidbodyType(phsyxRigidbody, BodyType.KINEMATIC)
+    }
+  }
+}
+
+export function equippableQueryExit(entity) {
+  const equipperComponent = getComponent(entity, EquipperComponent, true)
+  const equippedEntity = equipperComponent.equippedEntity
+
+  const equippedTransform = getComponent(equippedEntity, TransformComponent)
+  const collider = getComponent(equippedEntity, ColliderComponent)
+  if (collider) {
+    let phsyxRigidbody = collider.body as PhysX.PxRigidBody
+    useWorld().physics.changeRigidbodyType(phsyxRigidbody, BodyType.DYNAMIC)
+    teleportRigidbody(collider.body, equippedTransform.position, equippedTransform.rotation)
+  }
+
+  removeComponent(equippedEntity, EquippedComponent)
+}
 
 /**
  * @author Josh Field <github.com/HexaField>
+ * @author Hamza Mushtaq <github.com/hamzzam>
  */
-
-export const EquippableSystem = async (): Promise<System> => {
-  const networkUserQuery = defineQuery([Not(LocalInputReceiverComponent), AvatarComponent, TransformComponent])
-  const networkUserAddQuery = enterQuery(networkUserQuery)
+export default async function EquippableSystem(world: World) {
+  world.receptors.push(equippableActionReceptor)
 
   const equippableQuery = defineQuery([EquipperComponent])
-  const equippableAddQuery = enterQuery(equippableQuery)
-  const equippableRemoveQuery = exitQuery(equippableQuery)
 
-  return defineSystem((world: ECSWorld) => {
-    for (const entity of equippableAddQuery(world)) {
-      const equippedEntity = getComponent(entity, EquipperComponent).equippedEntity
-      // all equippables must have a collider to grab by in VR
-      const collider = getComponent(equippedEntity, ColliderComponent)
-      if (collider) collider.body.type = BodyType.KINEMATIC
-      // send equip to clients
-      if (!isClient) {
-        const networkObject = getComponent(equippedEntity, NetworkObjectComponent)
-        sendClientObjectUpdate(entity, NetworkObjectUpdateType.ObjectEquipped, [
-          BinaryValue.TRUE,
-          networkObject.networkId
-        ] as EquippedStateUpdateSchema)
-      }
+  return () => {
+    for (const entity of equippableQuery.enter()) {
+      equippableQueryEnter(entity)
     }
 
-    for (const entity of equippableQuery(world)) {
+    for (const entity of equippableQuery()) {
       const equipperComponent = getComponent(entity, EquipperComponent)
-      const equippableTransform = getComponent(equipperComponent.equippedEntity, TransformComponent)
-      const handTransform = getHandTransform(entity)
-      const { position, rotation } = handTransform
-      equippableTransform.position.copy(position)
-      equippableTransform.rotation.copy(rotation)
-      if (!isClient) {
-        for (const userEntity of networkUserAddQuery(world)) {
-          const networkObject = getComponent(equipperComponent.equippedEntity, NetworkObjectComponent)
-          sendClientObjectUpdate(entity, NetworkObjectUpdateType.ObjectEquipped, [
-            BinaryValue.TRUE,
-            networkObject.networkId
-          ] as EquippedStateUpdateSchema)
+      const equippedEntity = equipperComponent.equippedEntity
+      if (equippedEntity) {
+        const isOwnedByMe = getComponent(equippedEntity, NetworkObjectOwnedTag)
+        if (isOwnedByMe) {
+          const equippedComponent = getComponent(equipperComponent.equippedEntity, EquippedComponent)
+          const attachmentPoint = equippedComponent.attachmentPoint
+          const equippableTransform = getComponent(equipperComponent.equippedEntity, TransformComponent)
+          const handTransform = getHandTransform(entity, getParity(attachmentPoint))
+          const { position, rotation } = handTransform
+
+          const collider = getComponent(equippedEntity, ColliderComponent)
+          if (collider) {
+            teleportRigidbody(collider.body, position, rotation)
+          }
+
+          equippableTransform.position.copy(position)
+          equippableTransform.rotation.copy(rotation)
         }
       }
     }
 
-    for (const entity of equippableRemoveQuery(world)) {
-      const equipperComponent = getComponent(entity, EquipperComponent, true)
-      const equippedEntity = equipperComponent.equippedEntity
-      const equippedTransform = getComponent(equippedEntity, TransformComponent)
-      const collider = getComponent(equippedEntity, ColliderComponent)
-      if (collider) {
-        collider.body.type = BodyType.DYNAMIC
-        collider.body.updateTransform({
-          translation: equippedTransform.position,
-          rotation: equippedTransform.rotation
-        })
-      }
-      // send unequip to clients
-      if (!isClient) {
-        sendClientObjectUpdate(entity, NetworkObjectUpdateType.ObjectEquipped, [
-          BinaryValue.FALSE
-        ] as EquippedStateUpdateSchema)
-      }
+    for (const entity of equippableQuery.exit()) {
+      equippableQueryExit(entity)
     }
-
-    return world
-  })
+  }
 }

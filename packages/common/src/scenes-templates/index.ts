@@ -1,5 +1,5 @@
-import testsFallContent from './tests-fall.json'
 import skyIslandContent from './sky-island.json'
+import testsFallContent from './tests-fall.json'
 
 export const contents = [
   {
@@ -22,7 +22,7 @@ export const indexes = contents.map((value) => {
     id: value.id,
     images: { preview: { url: value.image } },
     name: value.name,
-    project_id: null,
+    scene_id: null,
     type: 'scene_listing'
   }
 })

@@ -1,5 +1,7 @@
 # Bot API - WORK IN PROGRESS
 
+Previously used agones for running inside an XREngine cluster - this is considered deprecated in favour of simplicitly.
+
 ### Example
 
 ```ts
@@ -8,7 +10,7 @@ import { XREngineBot } from '@xrengine/bot/src/bot'
 import { BotHooks } from '@xrengine/engine/src/bot/enums/BotHooks'
 
 const maxTimeout = 10 * 1000
-const bot = new XREngineBot({ name: 'bot-1', headless: false, autoLog: false })
+const bot = new XREngineBot({ name: 'bot-1', headless: false, verbose: false })
 const vector3 = new Vector3()
 
 const domain = process.env.APP_HOST

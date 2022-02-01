@@ -89,6 +89,7 @@ Dependent charts can also have values overwritten. Preface values with mariadb.*
 | mariadb.db.user | string | `"xrengine"` | Username created/used to connect to database |
 | mariadb.enabled | bool | `true` | Install internal mariadb, 'false' to use external db |
 | mariadb.externalHost | string | `nil` | hostname of external MariaDB instance, ignored if `mariadb.enabled` is `true` |
+| mariadb.externalPort | int | host port of MariaDB instance |
 | mariadb.replication.enabled | bool | `false` | Enable MariaDB slave replication |
 | server.affinity | object | `{}` |  |
 | server.enabled | bool | `true` | Install the xrsocial service |
@@ -135,7 +136,7 @@ This section lists configuration specific for server, client components.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | client.extraEnv.API_SERVER | string | `"http://xrengine.local"` |  |
-| client.extraEnv.NODE_ENV | string | `"development"` |  |
+| client.extraEnv.APP_ENV | string | `"development"` |  |
 | client.extraEnv.SITE_DESC | string | `"Connected Worlds for Everyone"` |  |
 | client.extraEnv.SITE_TITLE | string | `"MyXR"` |  |
 | rts.extraEnv.NAF_LISTEN_PORT | string | `"8081"` |  |

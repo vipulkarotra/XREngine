@@ -1,128 +1,89 @@
-import React, { Component } from 'react'
-import { Vector3 } from 'three'
+import React, { useState, useEffect, useCallback } from 'react'
 import PropertyGroup from './PropertyGroup'
+import { Euler } from 'three'
 import InputGroup from '../inputs/InputGroup'
 import Vector3Input from '../inputs/Vector3Input'
 import EulerInput from '../inputs/EulerInput'
-import i18n from 'i18next'
-import { withTranslation } from 'react-i18next'
+import { useTranslation } from 'react-i18next'
+import { CommandManager } from '../../managers/CommandManager'
+import EditorCommands from '../../constants/EditorCommands'
+import EditorEvents from '../../constants/EditorEvents'
+import { getComponent } from '@xrengine/engine/src/ecs/functions/ComponentFunctions'
+import { TransformComponent } from '@xrengine/engine/src/transform/components/TransformComponent'
+import { EditorComponentType } from './Util'
 
-/**
- * TransformPropertyGroupProps declaring properties for TransformPropertyGroup.
- *
- * @author Robert Long
- * @type {Object}
- */
-type TransformPropertyGroupProps = {
-  editor?: object
-  node?: object
-  t: Function
-}
-
+const euler = new Euler()
 /**
  * TransformPropertyGroup component is used to render editor view to customize properties.
  *
  * @author Robert Long
  * @type {class component}
  */
-export class TransformPropertyGroup extends Component<TransformPropertyGroupProps, {}> {
-  //setting the properties and translation of component
-  constructor(props: any) {
-    super(props)
-    this.translation = new Vector3()
-  }
+export const TransformPropertyGroup: EditorComponentType = (props) => {
+  const [, updateState] = useState<any>()
+  const { t } = useTranslation()
+  const [rotEulerValue, setState] = useState({ x: 0, y: 0, z: 0 })
 
-  //adding listener when component get mounted
-  componentDidMount() {
-    ;(this.props.editor as any).addListener('objectsChanged', this.onObjectsChanged)
-  }
+  const forceUpdate = useCallback(() => updateState({}), [])
 
-  //updating changes in properties
-  shouldComponentUpdate(nextProps) {
-    return nextProps.node !== this.props.node
-  }
+  useEffect(() => {
+    CommandManager.instance.addListener(EditorEvents.OBJECTS_CHANGED.toString(), forceUpdate)
+    euler.setFromQuaternion(transfromComponent.rotation)
+    setState({ x: euler.x, y: euler.y, z: euler.z })
 
-  //removing listener when component get unmount
-  componentWillUnmount() {
-    ;(this.props.editor as any).removeListener('objectsChanged', this.onObjectsChanged)
-  }
-
-  //setting translation
-  translation: Vector3
-
-  //function to handle changes in property and force update
-  onObjectsChanged = (objects, property) => {
-    for (let i = 0; i < objects.length; i++) {
-      if (
-        objects[i] === this.props.node &&
-        (property === 'position' ||
-          property === 'rotation' ||
-          property === 'scale' ||
-          property === 'matrix' ||
-          property == null)
-      ) {
-        this.forceUpdate()
-        return
-      }
+    return () => {
+      CommandManager.instance.removeListener(EditorEvents.OBJECTS_CHANGED.toString(), forceUpdate)
     }
-  }
+  }, [])
 
   //function to handle the position properties
-  onChangePosition = (value) => {
-    this.translation.subVectors(value, (this.props.node as any).position)
-    ;(this.props.editor as any).translateSelected(this.translation)
+  const onChangePosition = (value) => {
+    CommandManager.instance.executeCommandWithHistoryOnSelection(EditorCommands.POSITION, { positions: value })
   }
 
   //function to handle changes rotation properties
-  onChangeRotation = (value) => {
-    ;(this.props.editor as any).setRotationSelected(value)
+  const onChangeRotation = (value) => {
+    setState({ x: value.x, y: value.y, z: value.z })
+    CommandManager.instance.executeCommandWithHistoryOnSelection(EditorCommands.ROTATION, { rotations: value })
   }
 
   //function to handle changes in scale properties
-  onChangeScale = (value) => {
-    ;(this.props.editor as any).setScaleSelected(value)
+  const onChangeScale = (value) => {
+    CommandManager.instance.executeCommandWithHistoryOnSelection(EditorCommands.SCALE, {
+      scales: value,
+      overrideScale: true
+    })
   }
 
   //rendering editor view for Transform properties
-  render() {
-    const { node } = this.props as any
-    return (
-      <PropertyGroup name={this.props.t('editor:properties.transform.title')}>
-        {/* @ts-ignore */}
-        <InputGroup name="Position" label={this.props.t('editor:properties.transform.lbl-postition')}>
-          <Vector3Input
-            value={node.position}
-            /* @ts-ignore */
-            smallStep={0.01}
-            mediumStep={0.1}
-            largeStep={1}
-            onChange={this.onChangePosition}
-          />
-        </InputGroup>
-        {/* @ts-ignore */}
-        <InputGroup name="Rotation" label={this.props.t('editor:properties.transform.lbl-rotation')}>
-          <EulerInput
-            value={node.rotation}
-            onChange={this.onChangeRotation}
-            /* @ts-ignore */
-            unit="°"
-          />
-        </InputGroup>
-        {/* @ts-ignore */}
-        <InputGroup name="Scale" label={this.props.t('editor:properties.transform.lbl-scale')}>
-          <Vector3Input
-            uniformScaling
-            /* @ts-ignore */
-            smallStep={0.01}
-            mediumStep={0.1}
-            largeStep={1}
-            value={node.scale}
-            onChange={this.onChangeScale}
-          />
-        </InputGroup>
-      </PropertyGroup>
-    )
-  }
+  const transfromComponent = getComponent(props.node.entity, TransformComponent)
+
+  return (
+    <PropertyGroup name={t('editor:properties.transform.title')}>
+      <InputGroup name="Position" label={t('editor:properties.transform.lbl-postition')}>
+        <Vector3Input
+          value={transfromComponent.position}
+          smallStep={0.01}
+          mediumStep={0.1}
+          largeStep={1}
+          onChange={onChangePosition}
+        />
+      </InputGroup>
+      <InputGroup name="Rotation" label={t('editor:properties.transform.lbl-rotation')}>
+        <EulerInput value={rotEulerValue} onChange={onChangeRotation} unit="°" />
+      </InputGroup>
+      <InputGroup name="Scale" label={t('editor:properties.transform.lbl-scale')}>
+        <Vector3Input
+          uniformScaling
+          smallStep={0.01}
+          mediumStep={0.1}
+          largeStep={1}
+          value={transfromComponent.scale}
+          onChange={onChangeScale}
+        />
+      </InputGroup>
+    </PropertyGroup>
+  )
 }
 
-export default withTranslation()(TransformPropertyGroup)
+export default React.memo(TransformPropertyGroup, (prevProps, nextProps) => prevProps.node === nextProps.node)

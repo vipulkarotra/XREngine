@@ -1,80 +1,61 @@
-import React from 'react'
-import Accordion from '@material-ui/core/Accordion'
-import AccordionDetails from '@material-ui/core/AccordionDetails'
-import AccordionSummary from '@material-ui/core/AccordionSummary'
-import Typography from '@material-ui/core/Typography'
-import ExpandMoreIcon from '@material-ui/icons/ExpandMore'
-import { useStylesForBots as useStyles } from './styles'
-import List from '@material-ui/core/List'
-import ListItem from '@material-ui/core/ListItem'
-import ListItemSecondaryAction from '@material-ui/core/ListItemSecondaryAction'
-import ListItemText from '@material-ui/core/ListItemText'
-import IconButton from '@material-ui/core/IconButton'
-import DeleteIcon from '@material-ui/icons/Delete'
-import Paper from '@material-ui/core/Paper'
-import InputBase from '@material-ui/core/InputBase'
-import Grid from '@material-ui/core/Grid'
-import { Edit } from '@material-ui/icons'
-import { fetchBotAsAdmin } from '../../reducers/admin/bots/service'
-import { bindActionCreators, Dispatch } from 'redux'
-import { connect } from 'react-redux'
-import { selectAdminBotsState } from '../../reducers/admin/bots/selector'
-import { selectAuthState } from '../../../user/reducers/auth/selector'
-import Button from '@material-ui/core/Button'
-import { createBotCammand, removeBots, removeBotsCommand } from '../../reducers/admin/bots/service'
-import MuiAlert from '@material-ui/lab/Alert'
-import Snackbar from '@material-ui/core/Snackbar'
+import React, { useState, useEffect } from 'react'
+import Accordion from '@mui/material/Accordion'
+import AccordionDetails from '@mui/material/AccordionDetails'
+import AccordionSummary from '@mui/material/AccordionSummary'
+import Typography from '@mui/material/Typography'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
+import IconButton from '@mui/material/IconButton'
+import DeleteIcon from '@mui/icons-material/Delete'
+import Grid from '@mui/material/Grid'
+import { Edit } from '@mui/icons-material'
+import { BotService } from '../../services/BotsService'
+import { BotCommandService } from '../../services/BotsCommand'
+import { useDispatch } from '../../../store'
+import { useBotState } from '../../services/BotsService'
+import { useBotCommandState } from '../../services/BotsCommand'
+import { useAuthState } from '../../../user/services/AuthService'
 import UpdateBot from './updateBot'
+import ConfirmModel from '../../common/ConfirmModel'
+import { useStyles } from '../../styles/ui'
+import AlertMessage from '../../common/AlertMessage'
+import AddCommand from '../../common/AddCommand'
 
-interface Props {
-  fetchBotAsAdmin?: any
-  botsAdminState?: any
-  authState?: any
-  createBotCammand?: any
-  removeBots?: any
-  removeBotsCommand?: any
-}
-
-const mapStateToProps = (state: any): any => {
-  return {
-    botsAdminState: selectAdminBotsState(state),
-    authState: selectAuthState(state)
-  }
-}
-
-const mapDispatchToProps = (dispatch: Dispatch): any => ({
-  fetchBotAsAdmin: bindActionCreators(fetchBotAsAdmin, dispatch),
-  createBotCammand: bindActionCreators(createBotCammand, dispatch),
-  removeBots: bindActionCreators(removeBots, dispatch),
-  removeBotsCommand: bindActionCreators(removeBotsCommand, dispatch)
-})
-
-const Alert = (props) => {
-  return <MuiAlert elevation={6} variant="filled" {...props} />
-}
+interface Props {}
 
 const DisplayBots = (props: Props) => {
-  const { fetchBotAsAdmin, botsAdminState, authState, createBotCammand, removeBots, removeBotsCommand } = props
+  const dispatch = useDispatch()
   const classes = useStyles()
-  const [expanded, setExpanded] = React.useState<string | false>('panel0')
-  const [name, setName] = React.useState('')
-  const [description, setDescription] = React.useState('')
-  const [open, setOpen] = React.useState(false)
-  const [openModel, setOpenModel] = React.useState(false)
-  const [bot, setBot] = React.useState('')
+  const [expanded, setExpanded] = useState<string | false>('panel0')
+  const [command, setCommand] = useState({
+    name: '',
+    description: ''
+  })
+  const [open, setOpen] = useState(false)
+  const [openModel, setOpenModel] = useState(false)
+  const [bot, setBot] = useState('')
+  const [popConfirmOpen, setPopConfirmOpen] = useState(false)
+  const [botName, setBotName] = useState('')
+  const [botId, setBotId] = useState('')
+
+  const handleChangeCommand = (e) => {
+    const { name, value } = e.target
+    setCommand({ ...command, [name]: value })
+  }
 
   const handleChange = (panel: string) => (event: React.ChangeEvent<{}>, isExpanded: boolean) => {
     setExpanded(isExpanded ? panel : false)
   }
+  const botsAdminState = useBotState()
+  const botAdmin = botsAdminState
+  const botCommand = useBotCommandState()
+  const user = useAuthState().user
+  const botAdminData = botAdmin.bots
 
-  const botAdmin = botsAdminState.get('bots')
-  const user = authState.get('user')
-  const botAdminData = botAdmin.get('bots')
-  React.useEffect(() => {
-    if (user.id && botAdmin.get('updateNeeded')) {
-      fetchBotAsAdmin()
+  useEffect(() => {
+    if (user.id.value && botAdmin.updateNeeded.value) {
+      BotService.fetchBotAsAdmin()
     }
-  }, [botAdmin, user])
+  }, [botAdmin.updateNeeded.value, user?.id?.value])
 
   const handleOpenModel = (bot) => {
     setBot(bot)
@@ -85,27 +66,57 @@ const DisplayBots = (props: Props) => {
     setOpenModel(false)
   }
 
-  const handleClose = (event, reason) => {
+  const handleCloseConfirmModel = () => {
+    setPopConfirmOpen(false)
+  }
+
+  const handleClose = (event?: React.SyntheticEvent | Event, reason?: string) => {
     if (reason === 'clickaway') {
       return
     }
+
     setOpen(false)
   }
 
-  const sudmitCommandBot = (id: string) => {
+  const submitCommandBot = (id: string) => {
     const data = {
-      name: name,
-      description: description,
+      name: command.name,
+      description: command.description,
       botId: id
     }
-    createBotCammand(data)
-    setName('')
-    setDescription('')
+    BotCommandService.createBotCammand(data)
+    setCommand({
+      name: '',
+      description: ''
+    })
+  }
+
+  const submitRemoveBot = async () => {
+    await BotService.removeBots(botId)
+    setPopConfirmOpen(false)
+  }
+
+  const botRefresh = async () => {
+    if (botCommand.updateNeeded.value) await BotService.fetchBotAsAdmin()
+  }
+
+  const removeCommand = async (id) => {
+    await BotCommandService.removeBotsCommand(id)
+    botRefresh()
+  }
+
+  const addCommand = (id) => {
+    if (command.name) {
+      submitCommandBot(id)
+      botRefresh()
+    } else {
+      setOpen(true)
+    }
   }
 
   return (
-    <div className={classes.rootRigt}>
-      {botAdminData.map((bot, index) => {
+    <div className={classes.botRootRight}>
+      {botAdminData.value.map((bot, index) => {
         return (
           <Accordion expanded={expanded === `panel${index}`} onChange={handleChange(`panel${index}`)} key={bot.id}>
             <AccordionSummary
@@ -117,16 +128,16 @@ const DisplayBots = (props: Props) => {
               <Typography className={classes.heading}>{bot.name}</Typography>
               <Typography className={classes.secondaryHeading}>{bot?.description}</Typography>
             </AccordionSummary>
-            <AccordionDetails className={classes.details}>
+            <AccordionDetails className={classes.botDetails}>
               <div style={{ width: '100%' }}>
                 <Grid container spacing={5}>
                   <Grid item xs={8}>
                     <Grid container spacing={5}>
                       <Grid item xs={4}>
-                        <Typography className={classes.thirdHeadding} component="h1">
+                        <Typography className={classes.thirdHeading} component="h1">
                           Location:
                         </Typography>
-                        <Typography className={classes.thirdHeadding} component="h1">
+                        <Typography className={classes.thirdHeading} component="h1">
                           Instance:
                         </Typography>
                       </Grid>
@@ -142,10 +153,17 @@ const DisplayBots = (props: Props) => {
                   </Grid>
                   <Grid item xs={4} style={{ display: 'flex' }}>
                     <div style={{ marginLeft: 'auto' }}>
-                      <IconButton onClick={() => handleOpenModel(bot)}>
+                      <IconButton onClick={() => handleOpenModel(bot)} size="large">
                         <Edit style={{ color: '#fff' }} />
                       </IconButton>
-                      <IconButton onClick={() => removeBots(bot.id)}>
+                      <IconButton
+                        onClick={() => {
+                          setPopConfirmOpen(true)
+                          setBotId(bot.id)
+                          setBotName(bot.name)
+                        }}
+                        size="large"
+                      >
                         <DeleteIcon style={{ color: '#fff' }} />
                       </IconButton>
                     </div>
@@ -160,82 +178,32 @@ const DisplayBots = (props: Props) => {
                   Add more command
                 </Typography>
 
-                <Grid container spacing={2}>
-                  <Grid item xs={4}>
-                    <label>Command</label>
-                    <Paper component="div" className={classes.createInput}>
-                      <InputBase
-                        className={classes.input}
-                        placeholder="Enter command"
-                        style={{ color: '#fff' }}
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                      />
-                    </Paper>
-                  </Grid>
-                  <Grid item xs={8}>
-                    <label>Description</label>
-                    <Paper component="div" className={classes.createInput}>
-                      <InputBase
-                        className={classes.input}
-                        placeholder="Enter description"
-                        style={{ color: '#fff' }}
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                      />
-                    </Paper>
-                  </Grid>
-                </Grid>
-
-                <Button
-                  variant="contained"
-                  fullWidth={true}
-                  style={{ color: '#fff', background: '#3a4149', marginBottom: '20px' }}
-                  onClick={() => {
-                    if (name) {
-                      sudmitCommandBot(bot.id)
-                    } else {
-                      setOpen(true)
-                    }
-                  }}
-                >
-                  Add command
-                </Button>
-                {bot.botCommands.map((el, i) => {
-                  return (
-                    <div className={classes.alterContainer} key={i}>
-                      <List dense={true}>
-                        <ListItem>
-                          <ListItemText primary={`/${el.name} --> ${el.description} `} />
-                          <ListItemSecondaryAction>
-                            <IconButton edge="end" aria-label="delete" onClick={() => removeBotsCommand(el.id)}>
-                              <DeleteIcon style={{ color: '#fff' }} />
-                            </IconButton>
-                          </ListItemSecondaryAction>
-                        </ListItem>
-                      </List>
-                    </div>
-                  )
-                })}
+                <AddCommand
+                  command={command}
+                  handleChangeCommand={handleChangeCommand}
+                  addCommandData={() => addCommand(bot.id)}
+                  commandData={bot.botCommands}
+                  removeCommand={removeCommand}
+                />
               </div>
             </AccordionDetails>
           </Accordion>
         )
       })}
-      <Snackbar
-        open={open}
-        autoHideDuration={6000}
-        onClose={handleClose}
-        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-      >
-        <Alert onClose={handleClose} severity="warning">
-          {' '}
-          Fill in command is requiired!
-        </Alert>
-      </Snackbar>
+
+      <AlertMessage open={open} handleClose={handleClose} severity="warning" message="Fill in command is required!" />
+
       <UpdateBot open={openModel} handleClose={handleCloseModel} bot={bot} />
+
+      <ConfirmModel
+        popConfirmOpen={popConfirmOpen}
+        handleCloseModel={handleCloseConfirmModel}
+        submit={submitRemoveBot}
+        name={botName}
+        label={'bot'}
+      />
     </div>
   )
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(DisplayBots)
+export default DisplayBots
