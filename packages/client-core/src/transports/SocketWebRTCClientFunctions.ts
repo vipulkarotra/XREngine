@@ -301,6 +301,7 @@ export async function createTransport(networkTransport: SocketWebRTCClientTransp
   })
 
   if (direction === 'send') {
+    console.log('Adding listeners for send transport production', transport)
     transport.on(
       'produce',
       async ({ kind, rtpParameters, appData }: any, callback: (arg0: { id: any }) => void, errback: () => void) => {
@@ -438,14 +439,17 @@ export async function configureMediaTransports(
 }
 
 export async function createCamVideoProducer(networkTransport: SocketWebRTCClientTransport): Promise<void> {
+  console.log('createCamVideoProducer')
   const channelConnectionState = accessMediaInstanceConnectionState()
   const channelType = channelConnectionState.channelType.value
   const channelId = channelConnectionState.channelId.value
   if (MediaStreams.instance.videoStream !== null && channelConnectionState.videoEnabled.value === true) {
     if (networkTransport.sendTransport == null) {
+      console.log('Waiting for sendTransport to be created')
       await new Promise((resolve) => {
         const waitForTransportReadyInterval = setInterval(() => {
           if (networkTransport.sendTransport) {
+            console.log('sendTransport is ready')
             clearInterval(waitForTransportReadyInterval)
             resolve(true)
           }
@@ -455,16 +459,22 @@ export async function createCamVideoProducer(networkTransport: SocketWebRTCClien
 
     const transport = networkTransport.sendTransport
     try {
+      let produceInProgress = false
       await new Promise((resolve) => {
         const waitForProducer = setInterval(async () => {
           if (!MediaStreams.instance.camVideoProducer) {
-            MediaStreams.instance.camVideoProducer = await transport.produce({
-              track: MediaStreams.instance.videoStream.getVideoTracks()[0],
-              encodings: CAM_VIDEO_SIMULCAST_ENCODINGS,
-              appData: { mediaTag: 'cam-video', channelType: channelType, channelId: channelId }
-            })
+            console.log('Producing media on transport', transport)
+            if (!produceInProgress) {
+              produceInProgress = true
+              MediaStreams.instance.camVideoProducer = await transport.produce({
+                track: MediaStreams.instance.videoStream.getVideoTracks()[0],
+                encodings: CAM_VIDEO_SIMULCAST_ENCODINGS,
+                appData: { mediaTag: 'cam-video', channelType: channelType, channelId: channelId }
+              })
+            }
           } else {
             clearInterval(waitForProducer)
+            produceInProgress = true
             resolve(true)
           }
         }, 100)
@@ -472,7 +482,7 @@ export async function createCamVideoProducer(networkTransport: SocketWebRTCClien
       if (MediaStreams.instance.videoPaused) await MediaStreams.instance?.camVideoProducer.pause()
       else
         (await MediaStreams.instance.camVideoProducer) &&
-          resumeProducer(networkTransport, MediaStreams.instance.camVideoProducer)
+          (await resumeProducer(networkTransport, MediaStreams.instance.camVideoProducer))
     } catch (err) {
       console.log('error producing video', err)
     }
@@ -512,15 +522,20 @@ export async function createCamAudioProducer(networkTransport: SocketWebRTCClien
     const transport = networkTransport.sendTransport
     try {
       // Create a new transport for audio and start producing
+      let produceInProgress = false
       await new Promise((resolve) => {
         const waitForProducer = setInterval(async () => {
           if (!MediaStreams.instance.camAudioProducer) {
-            MediaStreams.instance.camAudioProducer = await transport.produce({
-              track: MediaStreams.instance.audioStream.getAudioTracks()[0],
-              appData: { mediaTag: 'cam-audio', channelType: channelType, channelId: channelId }
-            })
+            if (!produceInProgress) {
+              produceInProgress = true
+              MediaStreams.instance.camAudioProducer = await transport.produce({
+                track: MediaStreams.instance.audioStream.getAudioTracks()[0],
+                appData: { mediaTag: 'cam-audio', channelType: channelType, channelId: channelId }
+              })
+            }
           } else {
             clearInterval(waitForProducer)
+            produceInProgress = false
             resolve(true)
           }
         }, 100)
