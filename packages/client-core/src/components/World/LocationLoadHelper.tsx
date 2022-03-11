@@ -109,7 +109,7 @@ export const initEngine = async () => {
     initializeBrowser()
     await initializeCoreSystems(injectedSystems)
   } catch (err) {
-    console.err(err)
+    console.error(err)
     debugger
     throw err
   }
