@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react'
+import { useHistory } from 'react-router'
 
 import { AppAction, GeneralStateList } from '@xrengine/client-core/src/common/services/AppService'
 import {
@@ -16,14 +17,12 @@ import { useLocationState } from '@xrengine/client-core/src/social/services/Loca
 import { useDispatch } from '@xrengine/client-core/src/store'
 import { AuthService, useAuthState } from '@xrengine/client-core/src/user/services/AuthService'
 import { UserService, useUserState } from '@xrengine/client-core/src/user/services/UserService'
-import { EngineActions, useEngineState } from '@xrengine/engine/src/ecs/classes/EngineService'
+import { useEngineState } from '@xrengine/engine/src/ecs/classes/EngineService'
 import { shutdownEngine } from '@xrengine/engine/src/initializeEngine'
 import { Network } from '@xrengine/engine/src/networking/classes/Network'
 import { MessageTypes } from '@xrengine/engine/src/networking/enums/MessageTypes'
-import { dispatchLocal } from '@xrengine/engine/src/networking/functions/dispatchFrom'
 import { receiveJoinWorld } from '@xrengine/engine/src/networking/functions/receiveJoinWorld'
 
-import { usePartyState } from '../../social/services/PartyService'
 import { getSearchParamFromURL } from '../../util/getSearchParamFromURL'
 import GameServerWarnings from './GameServerWarnings'
 import { retriveLocationByName } from './LocationLoadHelper'
@@ -43,6 +42,7 @@ export const NetworkInstanceProvisioning = (props: Props) => {
   const channelConnectionState = useMediaInstanceConnectionState()
   const isUserBanned = locationState.currentLocation.selfUserBanned.value
   const engineState = useEngineState()
+  const history = useHistory()
 
   // 1. Ensure api server connection in and set up reset listener
   useEffect(() => {
@@ -63,6 +63,17 @@ export const NetworkInstanceProvisioning = (props: Props) => {
     }
     if (engineState.socketInstance.value) action({ instance: true })
   }, [engineState.socketInstance.value])
+
+  useEffect(() => {
+    const instanceIdValue = instanceConnectionState.instance.id.value
+    if (instanceIdValue) {
+      const url = new URL(window.location.href)
+      const searchParams = url.searchParams
+      const instanceId = searchParams.get('instanceId')
+      if (instanceId !== instanceIdValue) searchParams.set('instanceId', instanceIdValue)
+      history.push(url.pathname + url.search)
+    }
+  }, [instanceConnectionState.instance.id.value])
 
   // 2. once we have the location, provision the instance server
   useEffect(() => {
