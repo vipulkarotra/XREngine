@@ -180,51 +180,51 @@ export const initializeCoreSystems = async (systems: SystemModuleType<any>[] = [
     const systemsToLoad: SystemModuleType<any>[] = []
     console.log('initializeCoreSystems', systems)
     systemsToLoad.push(
-        {
-          type: SystemUpdateType.UPDATE,
-          systemModulePromise: import('./ecs/functions/FixedPipelineSystem'),
-          args: {tickRate: 60}
-        },
-        {
-          type: SystemUpdateType.FIXED_EARLY,
-          systemModulePromise: import('./ecs/functions/ActionDispatchSystem')
-        },
-        {
-          type: SystemUpdateType.FIXED_LATE,
-          systemModulePromise: import('./scene/systems/NamedEntitiesSystem')
-        },
-        {
-          type: SystemUpdateType.FIXED_LATE,
-          systemModulePromise: import('./transform/systems/TransformSystem')
-        },
-        {
-          type: SystemUpdateType.FIXED_LATE,
-          systemModulePromise: import('./scene/systems/SceneObjectSystem')
-        },
-        {
-          type: SystemUpdateType.FIXED_LATE,
-          systemModulePromise: import('./ecs/functions/ActionCleanupSystem')
-        }
+      {
+        type: SystemUpdateType.UPDATE,
+        systemModulePromise: import('./ecs/functions/FixedPipelineSystem'),
+        args: { tickRate: 60 }
+      },
+      {
+        type: SystemUpdateType.FIXED_EARLY,
+        systemModulePromise: import('./ecs/functions/ActionDispatchSystem')
+      },
+      {
+        type: SystemUpdateType.FIXED_LATE,
+        systemModulePromise: import('./scene/systems/NamedEntitiesSystem')
+      },
+      {
+        type: SystemUpdateType.FIXED_LATE,
+        systemModulePromise: import('./transform/systems/TransformSystem')
+      },
+      {
+        type: SystemUpdateType.FIXED_LATE,
+        systemModulePromise: import('./scene/systems/SceneObjectSystem')
+      },
+      {
+        type: SystemUpdateType.FIXED_LATE,
+        systemModulePromise: import('./ecs/functions/ActionCleanupSystem')
+      }
     )
 
     if (isClient) {
       systemsToLoad.push(
-          {
-            type: SystemUpdateType.POST_RENDER,
-            systemModulePromise: import('./renderer/WebGLRendererSystem')
-          },
-          {
-            type: SystemUpdateType.UPDATE,
-            systemModulePromise: import('./xr/systems/XRSystem')
-          },
-          {
-            type: SystemUpdateType.UPDATE,
-            systemModulePromise: import('./input/systems/ClientInputSystem')
-          },
-          {
-            type: SystemUpdateType.UPDATE,
-            systemModulePromise: import('./xrui/systems/XRUISystem')
-          }
+        {
+          type: SystemUpdateType.POST_RENDER,
+          systemModulePromise: import('./renderer/WebGLRendererSystem')
+        },
+        {
+          type: SystemUpdateType.UPDATE,
+          systemModulePromise: import('./xr/systems/XRSystem')
+        },
+        {
+          type: SystemUpdateType.UPDATE,
+          systemModulePromise: import('./input/systems/ClientInputSystem')
+        },
+        {
+          type: SystemUpdateType.UPDATE,
+          systemModulePromise: import('./xrui/systems/XRUISystem')
+        }
       )
     }
 
@@ -252,7 +252,7 @@ export const initializeCoreSystems = async (systems: SystemModuleType<any>[] = [
     console.log('dispatching initializeEngine')
     dispatchLocal(EngineActions.initializeEngine(true) as any)
     console.log('Initialized Engine')
-  } catch(err) {
+  } catch (err) {
     console.log('Error', err)
     throw err
   }

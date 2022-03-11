@@ -33,8 +33,11 @@ export const renderAvatarContextMenu = (world: World, userId: UserId, contextMen
 }
 
 export default async function AvatarUISystem(world: World) {
+  console.log('AvatarUISystem')
   const userQuery = defineQuery([AvatarComponent, TransformComponent, NetworkObjectComponent])
+  console.log('userQuery', userQuery)
   const AvatarContextMenuUI = createAvatarContextMenuView()
+  console.log('AvatarContextMenuUI', AvatarContextMenuUI)
 
   return () => {
     for (const userEntity of userQuery.enter()) {

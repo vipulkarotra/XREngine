@@ -18,31 +18,39 @@ import { LoadingSystemState } from './state/LoadingState'
 import { createLoaderDetailView } from './ui/XRUILoadingDetailView'
 
 export default async function XRUILoadingSystem(world: World) {
+  console.log('XRUILoadingSystem')
   const transitionPeriodSeconds = 1
   const transition = createTransitionState(transitionPeriodSeconds)
 
+  console.log('transition', transition)
   // todo: push timeout to accumulator
   receiveActionOnce(EngineEvents.EVENTS.JOINED_WORLD, () =>
     setTimeout(() => {
+      console.log('Got JOINED_WORLD, removing loader')
       mesh.visible = false
       transition.setState('OUT')
     }, 250)
   )
 
   const sceneState = accessSceneState()
+  console.log('sceneState', sceneState)
   const thumbnailUrl = sceneState?.currentScene?.thumbnailUrl?.value.replace('thumbnail.jpeg', 'cubemap.png')
+  console.log('thumbnailUrl', thumbnailUrl)
   const [ui, texture] = await Promise.all([createLoaderDetailView(), textureLoader.loadAsync(thumbnailUrl)])
+  console.log('Created loader detail view and loaded thumbnail', ui, texture)
 
   const mesh = new Mesh(
     new SphereGeometry(0.3),
     new MeshBasicMaterial({ side: DoubleSide, map: texture, transparent: true })
   )
+  console.log('mesh', mesh)
   // flip inside out
   mesh.scale.set(-1, 1, 1)
   Engine.camera.add(mesh)
   Engine.scene.add(Engine.camera)
 
   setObjectLayers(mesh, ObjectLayers.UI)
+  console.log('set Object layers')
 
   return () => {
     // add a slow rotation to animate on desktop, otherwise just keep it static for VR
