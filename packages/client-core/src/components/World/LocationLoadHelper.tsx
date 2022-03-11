@@ -102,11 +102,17 @@ const injectedSystems: SystemModuleType<any>[] = [
 ]
 
 export const initEngine = async () => {
-  if (Engine.isInitialized) return
-  Network.instance.transportHandler = new ClientTransportHandler()
-  createEngine()
-  initializeBrowser()
-  await initializeCoreSystems(injectedSystems)
+  try {
+    if (Engine.isInitialized) return
+    Network.instance.transportHandler = new ClientTransportHandler()
+    createEngine()
+    initializeBrowser()
+    await initializeCoreSystems(injectedSystems)
+  } catch (err) {
+    console.err(err)
+    debugger
+    throw err
+  }
 }
 
 export const initClient = async (project) => {
