@@ -176,73 +176,86 @@ export const initializeMediaServerSystems = async () => {
 }
 
 export const initializeCoreSystems = async (systems: SystemModuleType<any>[] = []) => {
-  const systemsToLoad: SystemModuleType<any>[] = []
-  systemsToLoad.push(
-    {
-      type: SystemUpdateType.UPDATE,
-      systemModulePromise: import('./ecs/functions/FixedPipelineSystem'),
-      args: { tickRate: 60 }
-    },
-    {
-      type: SystemUpdateType.FIXED_EARLY,
-      systemModulePromise: import('./ecs/functions/ActionDispatchSystem')
-    },
-    {
-      type: SystemUpdateType.FIXED_LATE,
-      systemModulePromise: import('./scene/systems/NamedEntitiesSystem')
-    },
-    {
-      type: SystemUpdateType.FIXED_LATE,
-      systemModulePromise: import('./transform/systems/TransformSystem')
-    },
-    {
-      type: SystemUpdateType.FIXED_LATE,
-      systemModulePromise: import('./scene/systems/SceneObjectSystem')
-    },
-    {
-      type: SystemUpdateType.FIXED_LATE,
-      systemModulePromise: import('./ecs/functions/ActionCleanupSystem')
-    }
-  )
-
-  if (isClient) {
+  try {
+    const systemsToLoad: SystemModuleType<any>[] = []
+    console.log('initializeCoreSystems', systems)
     systemsToLoad.push(
-      {
-        type: SystemUpdateType.POST_RENDER,
-        systemModulePromise: import('./renderer/WebGLRendererSystem')
-      },
-      {
-        type: SystemUpdateType.UPDATE,
-        systemModulePromise: import('./xr/systems/XRSystem')
-      },
-      {
-        type: SystemUpdateType.UPDATE,
-        systemModulePromise: import('./input/systems/ClientInputSystem')
-      },
-      {
-        type: SystemUpdateType.UPDATE,
-        systemModulePromise: import('./xrui/systems/XRUISystem')
-      }
+        {
+          type: SystemUpdateType.UPDATE,
+          systemModulePromise: import('./ecs/functions/FixedPipelineSystem'),
+          args: {tickRate: 60}
+        },
+        {
+          type: SystemUpdateType.FIXED_EARLY,
+          systemModulePromise: import('./ecs/functions/ActionDispatchSystem')
+        },
+        {
+          type: SystemUpdateType.FIXED_LATE,
+          systemModulePromise: import('./scene/systems/NamedEntitiesSystem')
+        },
+        {
+          type: SystemUpdateType.FIXED_LATE,
+          systemModulePromise: import('./transform/systems/TransformSystem')
+        },
+        {
+          type: SystemUpdateType.FIXED_LATE,
+          systemModulePromise: import('./scene/systems/SceneObjectSystem')
+        },
+        {
+          type: SystemUpdateType.FIXED_LATE,
+          systemModulePromise: import('./ecs/functions/ActionCleanupSystem')
+        }
     )
-  }
 
-  const world = useWorld()
-  await initSystems(world, systemsToLoad)
-
-  // load injected systems which may rely on core systems
-  await initSystems(world, systems)
-
-  const executeWorlds = (delta, elapsedTime) => {
-    for (const world of Engine.worlds) {
-      world.execute(delta, elapsedTime)
+    if (isClient) {
+      systemsToLoad.push(
+          {
+            type: SystemUpdateType.POST_RENDER,
+            systemModulePromise: import('./renderer/WebGLRendererSystem')
+          },
+          {
+            type: SystemUpdateType.UPDATE,
+            systemModulePromise: import('./xr/systems/XRSystem')
+          },
+          {
+            type: SystemUpdateType.UPDATE,
+            systemModulePromise: import('./input/systems/ClientInputSystem')
+          },
+          {
+            type: SystemUpdateType.UPDATE,
+            systemModulePromise: import('./xrui/systems/XRUISystem')
+          }
+      )
     }
+
+    const world = useWorld()
+    console.log('useWorld succeeded')
+    await initSystems(world, systemsToLoad)
+    console.log('Finished initing systemsToLoad')
+
+    // load injected systems which may rely on core systems
+    await initSystems(world, systems)
+    console.log('Finished loading injected systems')
+
+    const executeWorlds = (delta, elapsedTime) => {
+      for (const world of Engine.worlds) {
+        world.execute(delta, elapsedTime)
+      }
+    }
+
+    console.log('Executed all worlds')
+
+    Engine.engineTimer = Timer(executeWorlds)
+    Engine.engineTimer.start()
+
+    Engine.isInitialized = true
+    console.log('dispatching initializeEngine')
+    dispatchLocal(EngineActions.initializeEngine(true) as any)
+    console.log('Initialized Engine')
+  } catch(err) {
+    console.log('Error', err)
+    throw err
   }
-
-  Engine.engineTimer = Timer(executeWorlds)
-  Engine.engineTimer.start()
-
-  Engine.isInitialized = true
-  dispatchLocal(EngineActions.initializeEngine(true) as any)
 }
 
 /**

@@ -105,9 +105,13 @@ export const initEngine = async () => {
   try {
     if (Engine.isInitialized) return
     Network.instance.transportHandler = new ClientTransportHandler()
+    console.log('Made transport handler')
     createEngine()
+    console.log('Created Engine')
     initializeBrowser()
+    console.log('Initialized browser')
     await initializeCoreSystems(injectedSystems)
+    console.log('Initialized Core Systems')
   } catch (err) {
     console.error(err)
     debugger
