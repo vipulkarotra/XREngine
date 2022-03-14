@@ -167,5 +167,8 @@ export class SocketWebRTCClientTransport implements NetworkTransport {
         this.socket.emit(MessageTypes.Heartbeat.toString())
       }, 1000)
     })
+    this.socket.on('disconnect', () => {
+      this.socket.off('connect', )
+    })
   }
 }
