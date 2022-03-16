@@ -189,6 +189,7 @@ export const writeEntities = (v: ViewCursor, entities: Entity[]) => {
   for (let i = 0, l = entities.length; i < l; i++) {
     const entity = entities[i]
     const userIndex = NetworkObjectComponent.ownerIndex[entity]
+    console.log('userIndex to write', userIndex)
     const networkId = NetworkObjectComponent.networkId[entity] as NetworkId
     count += writeEntity(v, userIndex, networkId, entity) ? 1 : 0
   }
@@ -206,6 +207,7 @@ export const createDataWriter = (size: number = 100000) => {
   const view = createViewCursor(new ArrayBuffer(size))
 
   return (world: World, entities: Entity[]) => {
+    console.log('entities', entities)
     writeMetadata(view, world)
     writeEntities(view, entities)
     return sliceViewCursor(view)

@@ -114,7 +114,12 @@ export const sendCurrentProducers = async (
         )
       )
         Object.entries(client.media).map(([subName, subValue]) => {
-          if ((subValue as any).channelType === channelType && (subValue as any).channelId === channelId)
+          console.log('subValue', subValue)
+          if (
+            (subValue as any).channelType === channelType &&
+            (subValue as any).channelId === channelId &&
+            !(subValue as any).paused
+          )
             selfClient.socket!.emit(
               MessageTypes.WebRTCCreateProducer.toString(),
               client.userId,
@@ -294,6 +299,7 @@ export async function createInternalDataConsumer(
       ordered: false
     })
     consumer.on('message', (message) => {
+      console.log('Incoming message', message, toArrayBuffer(message))
       Network.instance.incomingMessageQueueUnreliable.add(toArrayBuffer(message))
       Network.instance.incomingMessageQueueUnreliableIDs.add(userId)
       // forward data to clients in world immediately

@@ -159,16 +159,13 @@ export class SocketWebRTCClientTransport implements NetworkTransport {
       if ((this.socket as any)._connected) return
       ;(this.socket as any)._connected = true
 
-      console.log('CONNECT to port', port, sceneId, locationId)
+      console.log('CONNECT in initialize to port', port, sceneId, locationId)
       onConnectToInstance(this)
 
       // Send heartbeat every second
       this.heartbeat = setInterval(() => {
         this.socket.emit(MessageTypes.Heartbeat.toString())
       }, 1000)
-    })
-    this.socket.on('disconnect', () => {
-      this.socket.off('connect', )
     })
   }
 }

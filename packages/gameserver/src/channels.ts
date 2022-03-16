@@ -510,6 +510,8 @@ const onConnection = (app: Application) => async (connection: SocketIOConnection
   logger.info(
     `user ${userId} joining ${connection.socketQuery.locationId} with sceneId ${connection.socketQuery.sceneId}`
   )
+  const world = useWorld()
+  if (world && world.clients) logger.info('existing client for user', world.clients, world.clients.get(userId))
   let locationId = connection.socketQuery.locationId!
   let channelId = connection.socketQuery.channelId!
   const sceneId: string = connection.socketQuery.sceneId

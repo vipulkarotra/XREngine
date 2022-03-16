@@ -408,10 +408,15 @@ export async function handleDisconnect(socket): Promise<any> {
 export async function handleLeaveWorld(socket, data, callback): Promise<any> {
   const world = useWorld()
   const userId = getUserIdFromSocketId(socket.id)!
+  console.log('handleLeaveWorld', userId)
   if (Network.instance.transports)
     for (const [, transport] of Object.entries(Network.instance.transports))
-      if ((transport as any).appData.peerId === userId) closeTransport(transport)
+      if ((transport as any).appData.peerId === userId) {
+        console.log('closing transport', transport)
+        closeTransport(transport)
+      }
   if (world.clients.has(userId)) {
+    console.log('destroying client', userId)
     dispatchFrom(world.hostId, () => NetworkWorldAction.destroyClient({ $from: userId }))
   }
   if (callback !== undefined) callback({})

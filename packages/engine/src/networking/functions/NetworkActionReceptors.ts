@@ -18,6 +18,7 @@ const removeAllNetworkClients = (world: World, removeSelf = false) => {
 }
 
 const addClientNetworkActionReceptor = (world: World, userId: UserId, name: string, index: number) => {
+  console.log('addClientNetworkActionReceptor', userId, name, index)
   // host adds the client manually during connectToWorld
   if (world.isHosting) return
 
@@ -25,8 +26,10 @@ const addClientNetworkActionReceptor = (world: World, userId: UserId, name: stri
   world.userIdToUserIndex.set(userId, index)
   world.userIndexToUserId.set(index, userId)
 
-  if (world.clients.has(userId))
+  if (world.clients.has(userId)) {
+    console.log('world', world)
     return console.log(`[NetworkActionReceptors]: client with id ${userId} and name ${name} already exists. ignoring.`)
+  }
 
   world.clients.set(userId, {
     userId: userId,
@@ -51,6 +54,7 @@ const removeClientNetworkActionReceptor = (world: World, userId: UserId, allowRe
   world.userIdToUserIndex.delete(userId)
   world.userIndexToUserId.delete(userIndex)
   world.clients.delete(userId)
+  world.namedEntities.delete(userId)
 }
 
 const spawnObjectNetworkActionReceptor = (world: World, action: ReturnType<typeof NetworkWorldAction.spawnObject>) => {

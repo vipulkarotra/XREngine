@@ -146,10 +146,16 @@ const EntityDataByteLength =
 
 export const readEntity = (v: ViewCursor, world: World) => {
   const userIndex = readUint32(v)
+  console.log('userIndex', userIndex)
+  console.log('userIndexToUserId', world.userIndexToUserId)
+  console.log('userIdIndexToUser', world.userIdToUserIndex)
   const userId = world.userIndexToUserId.get(userIndex)!
+  console.log('userId', userId)
   const netId = readUint32(v) as NetworkId
+  console.log('netId', netId)
 
   const entity = world.getNetworkObject(userId, netId)
+  console.log('entity', entity)
 
   if (!entity) {
     scrollViewCursor(v, EntityDataByteLength)

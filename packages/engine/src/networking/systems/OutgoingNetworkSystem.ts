@@ -24,6 +24,7 @@ const serializeAndSend = (world: World, serialize: Function, sendData: Function)
   const ents = authoritativeNetworkTransformsQuery(world)
   if (ents.length > 0) {
     const data = serialize(world, ents)
+    console.log('data', data)
 
     // todo: insert historian logic here
 
