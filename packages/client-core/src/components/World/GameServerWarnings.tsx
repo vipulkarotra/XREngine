@@ -114,7 +114,7 @@ const GameServerWarnings = (props: GameServerWarningsProps) => {
 
       case WarningModalTypes.INSTANCE_DISCONNECTED:
         if (!Engine.userId) return
-        if (transport.left || engineState.isTeleporting.value) return
+        if (transport.left || engineState.isTeleporting.value || transport.reconnecting) return
 
         setModalValues({
           open: true,
@@ -128,7 +128,7 @@ const GameServerWarnings = (props: GameServerWarningsProps) => {
 
       case WarningModalTypes.CHANNEL_DISCONNECTED:
         if (!Engine.userId) return
-        if (transport.left) return
+        if (transport.left || transport.reconnecting) return
 
         const channels = chatState.channels.channels.value
         const instanceChannel = Object.values(channels).find(

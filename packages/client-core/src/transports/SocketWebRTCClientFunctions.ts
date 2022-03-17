@@ -468,6 +468,12 @@ export async function createTransport(networkTransport: SocketWebRTCClientTransp
         )
         await createTransport(networkTransport, direction)
         console.log('Re-created transport', direction, channelType, channelId)
+        EngineEvents.instance.dispatchEvent({
+          type:
+            networkTransport.type === 'world'
+              ? SocketWebRTCClientTransport.EVENTS.INSTANCE_RECONNECTED
+              : SocketWebRTCClientTransport.EVENTS.CHANNEL_RECONNECTED
+        })
       }, 5000)
       // await request(MessageTypes.WebRTCTransportClose.toString(), {transportId: transport.id});
     }
