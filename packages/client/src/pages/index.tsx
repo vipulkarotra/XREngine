@@ -45,12 +45,12 @@ export const HomePage = (): any => {
         </div>
         <nav className="navbar">
           <div className="logo-section">
-            <object className="lander-logo" data="static/overlay_mark.svg" />
-            <div className="logo-bottom">
+            <object className="lander-logo" data="static/theroots.svg" />
+            {/* <div className="logo-bottom">
               <span className="gray-txt">{t('index.by')}</span>
               <span className="gradiant-txt">{t('index.xr')}</span>
               <span className="white-txt">{t('index.foundation')}</span>
-            </div>
+            </div> */}
           </div>
         </nav>
 
@@ -69,21 +69,21 @@ export const HomePage = (): any => {
           </div>
         </div>
 
-        <div className="link-container">
+        {/* <div className="link-container">
           <div className="link-block">
-            <a target="_blank" className="icon" href="https://discord.gg/xrf">
+             <a target="_blank" className="icon" href="https://discord.gg/xrf">
               <img src="static/discord.svg" />
             </a>
             <a target="_blank" className="icon" href="https://github.com/XRFoundation">
               <img src="static/github.svg" />
-            </a>
+            </a> 
           </div>
           <div className="logo-bottom">
             <span className="gray-txt">{t('index.by')}</span>
             <span className="gradiant-txt">{t('index.xr')}</span>
             <span className="white-txt">{t('index.foundation')}</span>
           </div>
-        </div>
+        </div> */}
       </div>
     )
 }

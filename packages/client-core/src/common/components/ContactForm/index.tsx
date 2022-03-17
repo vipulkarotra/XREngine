@@ -23,7 +23,7 @@ export const ContactForm = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    if (!validate()) return
+    if (validate()) return
 
     var templateParams = {
       from_name: userName,
